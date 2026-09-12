@@ -26,8 +26,9 @@
     if (!bundleID) return NO;
     
     // Only activate in 8 Ball Pool
-    if ([bundleID isEqualToString:@TARGET_BUNDLE_1]) return YES;
-    if ([bundleID isEqualToString:@TARGET_BUNDLE_2]) return YES;
+    if ([bundleID isEqualToString:TARGET_BUNDLE_1]) return YES;
+    if ([bundleID isEqualToString:TARGET_BUNDLE_2]) return YES;
+    if ([bundleID isEqualToString:TARGET_BUNDLE_3]) return YES;
     
     // Also allow if bundle contains miniclip
     if ([bundleID containsString:@"miniclip"] && [bundleID containsString:@"8ball"]) return YES;
