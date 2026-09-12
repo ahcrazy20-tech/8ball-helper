@@ -1,0 +1,9 @@
+Package: com.yourname.poolhelper
+Name: PoolHelper Live Lines
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Live predicted ball and lines for 8 Ball Pool - TrollFools compatible
+Maintainer: you
+Author: you
+Section: Tweaks
+Depends: mobilesubstrate

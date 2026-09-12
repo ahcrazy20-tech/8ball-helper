@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>8Ball LIVE Helper - iPhone</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0f1f0f;color:#fff;font-family:-apple-system,system-ui,sans-serif;overflow:hidden}
+  header{background:#1a3a1a;padding:12px;text-align:center;border-bottom:2px solid #2f6f2f}
+  h1{font-size:18px}
+  #controls{display:flex;gap:6px;padding:8px;background:#162816;flex-wrap:wrap;justify-content:center}
+  button{padding:10px 14px;border-radius:10px;border:none;font-weight:600;font-size:14px}
+  .primary{background:#ffeb3b;color:#000}
+  .secondary{background:#2f6f2f;color:#fff}
+  .danger{background:#ff4444;color:#fff}
+  #canvasWrap{position:relative;width:100vw;height:calc(100vh - 140px);background:#1b4d1b;display:flex;align-items:center;justify-content:center}
+  canvas{max-width:100%;max-height:100%;touch-action:none;background:#2a6a2a;border:2px solid #4caf50}
+  #info{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.7);padding:8px 12px;border-radius:8px;font-size:12px}
+  #steps{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:8px 14px;border-radius:20px;font-size:13px}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎱 8Ball Helper - iPhone LIVE</h1>
+  <div style="font-size:11px;opacity:0.7">Tap to mark balls, shows predicted lines like dylib</div>
+</header>
+
+<div id="controls">
+  <label for="upload" class="primary" style="padding:10px 14px;border-radius:10px;font-weight:600">📸 Upload Screenshot</label>
+  <input type="file" id="upload" accept="image/*">
+  <button class="secondary" id="modeCue">⚪ Mark Cue</button>
+  <button class="secondary" id="modeTarget">🔵 Mark Target</button>
+  <button class="secondary" id="modePocket">🕳️ Mark Pocket</button>
+  <button class="primary" id="bestBtn">⭐ Best Shot</button>
+  <button class="danger" id="clearBtn">Clear</button>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="c" width="1000" height="600"></canvas>
+  <div id="steps">Step 1: Upload screenshot of table</div>
+  <div id="info">Angle: - | Tap balls to mark</div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let img = null;
+let cue = null;
+let targets = [];
+let pockets = [];
+let mode = 'cue'; // cue, target, pocket
+let bestShot = null;
+
+const stepsEl = document.getElementById('steps');
+const infoEl = document.getElementById('info');
+
+function resizeCanvasToImage() {
+  if (!img) return;
+  // keep aspect but fit to container
+  canvas.width = img.width;
+  canvas.height = img.height;
+  draw();
+}
+
+function ghostBall(target, pocket, radius=18) {
+  let dx = pocket.x - target.x;
+  let dy = pocket.y - target.y;
+  let len = Math.hypot(dx, dy);
+  if (len === 0) return {...target};
+  dx/=len; dy/=len;
+  return {x: target.x - dx*radius*2, y: target.y - dy*radius*2, dir:{x:dx,y:dy}};
+}
+
+function calcAngle(cue, ghost, target, pocket) {
+  let v1x = ghost.x - cue.x, v1y = ghost.y - cue.y;
+  let v2x = pocket.x - target.x, v2y = pocket.y - target.y;
+  let l1 = Math.hypot(v1x,v1y), l2 = Math.hypot(v2x,v2y);
+  if (l1===0||l2===0) return 180;
+  v1x/=l1; v1y/=l1; v2x/=l2; v2y/=l2;
+  let dot = v1x*v2x + v1y*v2y;
+  dot = Math.max(-1, Math.min(1, dot));
+  return Math.acos(dot)*180/Math.PI;
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (img) {
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  } else {
+    // demo green table
+    ctx.fillStyle='#2a6a2a';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='#4caf50'; ctx.lineWidth=3;
+    ctx.strokeRect(20,20,canvas.width-40,canvas.height-40);
+    // pockets
+    const demoPockets = [{x:20,y:20},{x:canvas.width/2,y:20},{x:canvas.width-20,y:20},{x:20,y:canvas.height-20},{x:canvas.width/2,y:canvas.height-20},{x:canvas.width-20,y:canvas.height-20}];
+    ctx.fillStyle='#000';
+    demoPockets.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,16,0,Math.PI*2);ctx.fill();});
+    if (pockets.length===0) pockets = demoPockets;
+  }
+
+  // draw pockets
+  pockets.forEach(p=>{
+    ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(p.x,p.y,14,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#ff0000'; ctx.lineWidth=2; ctx.stroke();
+  });
+
+  // draw faint lines for all combos
+  if (cue && targets.length && pockets.length) {
+    targets.forEach(t=>{
+      pockets.forEach(pk=>{
+        const g = ghostBall(t,pk);
+        const ang = calcAngle(cue,g,t,pk);
+        if (ang>60) return;
+        ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(cue.x,cue.y); ctx.lineTo(g.x,g.y); ctx.stroke();
+        ctx.strokeStyle='rgba(100,255,100,0.15)';
+        ctx.beginPath(); ctx.moveTo(t.x,t.y); ctx.lineTo(pk.x,pk.y); ctx.stroke();
+      });
+    });
+  }
+
+  // draw best
+  if (bestShot) {
+    const {target,pocket,ghost} = bestShot;
+    // yellow cue->ghost
+    ctx.strokeStyle='#ffeb3b'; ctx.lineWidth=4; ctx.shadowColor='#ffeb3b'; ctx.shadowBlur=6;
+    ctx.beginPath(); ctx.moveTo(cue.x,cue.y); ctx.lineTo(ghost.x,ghost.y); ctx.stroke();
+    ctx.shadowBlur=0;
+    // ghost
+    ctx.strokeStyle='#ffeb3b'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(ghost.x,ghost.y,14,0,Math.PI*2); ctx.stroke();
+    // green target->pocket
+    ctx.strokeStyle='#00ff00'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(target.x,target.y); ctx.lineTo(pocket.x,pocket.y); ctx.stroke();
+    // cushion bounce
+    const dir = ghost.dir;
+    if (dir) {
+      let bx = ghost.x + dir.x*400;
+      let by = ghost.y + dir.y*400;
+      ctx.strokeStyle='#00ffff'; ctx.lineWidth=2; ctx.setLineDash([8,6]);
+      ctx.beginPath(); ctx.moveTo(ghost.x,ghost.y); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // draw balls
+  if (cue) {
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cue.x,cue.y,12,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#000'; ctx.font='10px sans-serif'; ctx.fillText('CUE',cue.x-12,cue.y-16);
+  }
+  targets.forEach((t,i)=>{
+    ctx.fillStyle='#2196f3'; ctx.beginPath(); ctx.arc(t.x,t.y,11,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.fillText(i+1,t.x-3,t.y+3);
+  });
+}
+
+function findBest() {
+  if (!cue || targets.length===0 || pockets.length===0) return null;
+  let best=null, bestScore=1e9;
+  targets.forEach(t=>{
+    pockets.forEach(p=>{
+      const g = ghostBall(t,p);
+      const ang = calcAngle(cue,g,t,p);
+      if (ang>60) return;
+      const score = ang + Math.hypot(cue.x-g.x,cue.y-g.y)*0.01;
+      if (score<bestScore) {
+        bestScore=score;
+        best={target:t,pocket:p,ghost:g,angle:ang,score};
+      }
+    });
+  });
+  return best;
+}
+
+canvas.addEventListener('click', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left)*scaleX;
+  const y = (e.clientY - rect.top)*scaleY;
+
+  if (mode==='cue') {
+    cue = {x,y};
+    stepsEl.textContent='Cue set! Now mark target ball';
+    mode='target';
+  } else if (mode==='target') {
+    targets.push({x,y});
+    stepsEl.textContent=`Target ${targets.length} set! Mark pocket or tap Best Shot`;
+  } else if (mode==='pocket') {
+    pockets.push({x,y});
+    stepsEl.textContent='Pocket set! Tap Best Shot';
+  }
+  bestShot = findBest();
+  if (bestShot) infoEl.textContent=`Best: ${bestShot.angle.toFixed(1)}° | Easiest ball #${targets.indexOf(bestShot.target)+1}`;
+  draw();
+});
+
+// Touch for iPhone
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (t.clientX - rect.left)*scaleX;
+  const y = (t.clientY - rect.top)*scaleY;
+  if (mode==='cue') { cue={x,y}; mode='target'; stepsEl.textContent='Cue set! Now tap target ball'; }
+  else if (mode==='target') { targets.push({x,y}); stepsEl.textContent=`Target ${targets.length} added`; }
+  else if (mode==='pocket') { pockets.push({x,y}); }
+  bestShot=findBest();
+  if (bestShot) infoEl.textContent=`Best: ${bestShot.angle.toFixed(1)}° - green line is shot`;
+  draw();
+}, {passive:false});
+
+document.getElementById('upload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    img = new Image();
+    img.onload = ()=>{ resizeCanvasToImage(); stepsEl.textContent='Image loaded! Tap cue ball (white)'; mode='cue'; cue=null; targets=[]; pockets=[]; };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('modeCue').onclick=()=>{mode='cue'; stepsEl.textContent='Mode: Tap WHITE cue ball';};
+document.getElementById('modeTarget').onclick=()=>{mode='target'; stepsEl.textContent='Mode: Tap ball you want to pot';};
+document.getElementById('modePocket').onclick=()=>{mode='pocket'; stepsEl.textContent='Mode: Tap pocket';};
+document.getElementById('bestBtn').onclick=()=>{
+  bestShot=findBest();
+  if (bestShot) {
+    stepsEl.textContent=`Best shot: ${bestShot.angle.toFixed(1)}° - Yellow=cue, Green=target`;
+    infoEl.textContent=`Angle ${bestShot.angle.toFixed(1)}° | Dist ${bestShot.score.toFixed(1)}`;
+  } else {
+    stepsEl.textContent='Mark cue + target + pocket first';
+  }
+  draw();
+};
+document.getElementById('clearBtn').onclick=()=>{
+  cue=null; targets=[]; pockets=[]; bestShot=null;
+  // keep demo pockets
+  pockets=[{x:20,y:20},{x:canvas.width/2,y:20},{x:canvas.width-20,y:20},{x:20,y:canvas.height-20},{x:canvas.width/2,y:canvas.height-20},{x:canvas.width-20,y:canvas.height-20}];
+  stepsEl.textContent='Cleared! Mark cue again';
+  draw();
+};
+
+draw();
+stepsEl.textContent='Ready! Upload screenshot or tap on demo table';
+</script>
+</body>
+</html>
