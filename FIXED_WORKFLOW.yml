@@ -1,0 +1,114 @@
+name: Build Stealth Dylib
+
+on:
+  push:
+    branches: [ main, arena/* ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app || true
+
+      - name: Install Theos (robust)
+        run: |
+          set -e
+          if [ ! -d "$HOME/theos" ]; then
+            echo "[*] Cloning Theos..."
+            git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          else
+            echo "[*] Theos exists, updating..."
+            cd $HOME/theos && git pull --recurse-submodules || true
+          fi
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+          # Install dependencies
+          brew install ldid dpkg xz 2>/dev/null || true
+          # Ensure sdks
+          ls $HOME/theos/sdks/ || echo "No sdks yet"
+          # Download iPhoneOS SDK if needed
+          if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ] && [ ! -d "$HOME/theos/sdks/iPhoneOS17.0.sdk" ]; then
+            echo "[*] Downloading SDK..."
+            curl -LO https://github.com/theos/sdks/archive/master.zip || true
+            unzip -q master.zip || true
+            mkdir -p $HOME/theos/sdks
+            cp -R sdks-master/* $HOME/theos/sdks/ 2>/dev/null || true
+          fi
+
+      - name: Show Theos
+        run: |
+          echo "THEOS=$THEOS"
+          ls -la $HOME/theos || true
+          which ldid || echo "ldid not found, will use ldid from theos"
+          ls $HOME/theos/bin || true
+
+      - name: Build dylib (Theos)
+        run: |
+          set -e
+          export THEOS=$HOME/theos
+          export PATH=$THEOS/bin:$PATH
+          echo "THEOS=$THEOS"
+          # Clean
+          make clean || true
+          # Build with stealth flags
+          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless -j$(sysctl -n hw.ncpu) || make FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          echo "Build done"
+          find . -name "*.dylib" | head -20
+          ls -lh .theos/obj/ || true
+          ls -lh .theos/obj/debug/ || true
+          ls -lh .theos/obj/debug/arm64*/ || true
+
+      - name: Build fallback (direct clang, no Theos)
+        if: failure()
+        run: |
+          echo "[*] Theos build failed, trying direct clang build..."
+          chmod +x ./build.sh
+          ./build.sh || echo "Fallback also failed, but continue"
+
+      - name: Post-process dylib for stealth
+        run: |
+          set -e
+          mkdir -p artifact
+          # Find all dylibs
+          find . -name "*.dylib" -type f | while read f; do
+            echo "Processing $f"
+            # Strip symbols
+            xcrun strip -x "$f" || strip -x "$f" || true
+            # Remove PoolHelper string from filename -> rename to innocuous
+            cp "$f" artifact/libUnityGraphics.dylib
+            cp "$f" artifact/libSwiftyHelper.dylib || true
+            cp "$f" artifact/
+          done
+          # Also check .theos
+          find .theos -name "*.dylib" -type f -exec cp {} artifact/ \; 2>/dev/null || true
+          # If deb exists
+          find . -name "*.deb" -exec cp {} artifact/ \; 2>/dev/null || true
+          ls -lh artifact/
+          # Check strings for leak
+          echo "=== Checking for suspicious strings (should be minimal) ==="
+          strings artifact/*.dylib | grep -i "poolhelper\|PoolHelper\|Tweak\|ghost" || echo "No obvious cheat strings found - GOOD"
+          # Check exports
+          echo "=== Exports ==="
+          nm -gU artifact/*.dylib | head -20 || true
+          otool -L artifact/*.dylib | head -30 || true
+
+      - name: Upload stealth dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stealth-Dylib-Undetectable
+          path: artifact/
+          retention-days: 30
+
+      - name: Create Release (if tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifact/*
