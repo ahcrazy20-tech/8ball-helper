@@ -13,9 +13,12 @@
 @property (nonatomic, strong) CAShapeLayer *scratchLayer;
 @property (nonatomic, strong) CAShapeLayer *comboLayer;
 @property (nonatomic, strong) CAShapeLayer *cushionLayer;
+@property (nonatomic, strong) CAShapeLayer *powerLayer;
 @property (nonatomic, strong) UIButton *toggleButton;
 @property (nonatomic, strong) UIView *containerView;
-@property (nonatomic, strong) UILabel *infoLabel; // For HUD
+@property (nonatomic, strong) UILabel *infoLabel;
+@property (nonatomic, strong) UILabel *powerLabel;
+@property (nonatomic, strong) UIView *autoShotIndicator;
 @end
 
 @implementation OverlayWindow
@@ -102,6 +105,12 @@
         self.cushionLayer.fillColor = nil;
         self.cushionLayer.lineDashPattern = @[@6, @4];
         
+        // Power suggestion - yellow
+        self.powerLayer = [CAShapeLayer layer];
+        self.powerLayer.strokeColor = [[UIColor yellowColor] CGColor];
+        self.powerLayer.lineWidth = 2.0;
+        self.powerLayer.fillColor = nil;
+        
         [self.containerView.layer addSublayer:self.cueLineLayer];
         [self.containerView.layer addSublayer:self.targetLineLayer];
         [self.containerView.layer addSublayer:self.ghostLayer];
@@ -110,11 +119,12 @@
         [self.containerView.layer addSublayer:self.scratchLayer];
         [self.containerView.layer addSublayer:self.comboLayer];
         [self.containerView.layer addSublayer:self.cushionLayer];
+        [self.containerView.layer addSublayer:self.powerLayer];
         
         [self addSubview:self.containerView];
         
-        // Info label for HUD (Wizard Info HUD)
-        self.infoLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, frame.size.height - 60, 200, 40)];
+        // Info label for HUD
+        self.infoLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, frame.size.height - 70, 200, 40)];
         self.infoLabel.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
         self.infoLabel.textColor = [UIColor whiteColor];
         self.infoLabel.font = [UIFont systemFontOfSize:10];
@@ -124,6 +134,31 @@
         self.infoLabel.textAlignment = NSTextAlignmentCenter;
         self.infoLabel.hidden = YES;
         [self addSubview:self.infoLabel];
+        
+        // Power label - shows suggested power 1-14 with accuracy
+        self.powerLabel = [[UILabel alloc] initWithFrame:CGRectMake(frame.size.width - 120, 50, 100, 50)];
+        self.powerLabel.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
+        self.powerLabel.textColor = [UIColor colorWithRed:1.0 green:0.92 blue:0.23 alpha:1.0];
+        self.powerLabel.font = [UIFont boldSystemFontOfSize:11];
+        self.powerLabel.numberOfLines = 3;
+        self.powerLabel.layer.cornerRadius = 8;
+        self.powerLabel.layer.masksToBounds = YES;
+        self.powerLabel.textAlignment = NSTextAlignmentCenter;
+        self.powerLabel.hidden = YES;
+        [self addSubview:self.powerLabel];
+        
+        // Auto shot indicator
+        self.autoShotIndicator = [[UIView alloc] initWithFrame:CGRectMake(frame.size.width/2 - 50, 80, 100, 25)];
+        self.autoShotIndicator.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.8];
+        self.autoShotIndicator.layer.cornerRadius = 12;
+        self.autoShotIndicator.hidden = YES;
+        UILabel *autoLabel = [[UILabel alloc] initWithFrame:self.autoShotIndicator.bounds];
+        autoLabel.text = @"🤖 AUTO";
+        autoLabel.textColor = [UIColor whiteColor];
+        autoLabel.font = [UIFont boldSystemFontOfSize:11];
+        autoLabel.textAlignment = NSTextAlignmentCenter;
+        [self.autoShotIndicator addSubview:autoLabel];
+        [self addSubview:self.autoShotIndicator];
         
         // Tiny toggle button - stealth
         self.toggleButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -311,7 +346,10 @@
     self.scratchLayer.path = nil;
     self.comboLayer.path = nil;
     self.cushionLayer.path = nil;
+    self.powerLayer.path = nil;
     self.infoLabel.hidden = YES;
+    self.powerLabel.hidden = YES;
+    self.autoShotIndicator.hidden = YES;
 }
 
 - (void)updateTableBounds:(CGRect)bounds {
@@ -540,7 +578,6 @@
 
 - (void)drawCushionPath:(NSArray<NSValue*>*)path {
     if (!path || path.count < 2) return;
-    
     UIBezierPath *cushionPath = [UIBezierPath bezierPath];
     for (NSInteger i = 0; i < path.count; i++) {
         CGPoint p = [path[i] CGPointValue];
@@ -548,6 +585,52 @@
         else [cushionPath addLineToPoint:p];
     }
     self.cushionLayer.path = cushionPath.CGPath;
+}
+
+- (void)drawPowerSuggestion:(CGFloat)power accuracy:(CGFloat)accuracy {
+    ModMenu *menu = [ModMenu sharedMenu];
+    if (!menu.autoPowerEnabled) {
+        self.powerLabel.hidden = YES;
+        return;
+    }
+    if (!self.helperEnabled || self.isPanicHidden || self.hidden) return;
+    if (IsScreenCaptured()) return;
+    
+    // Show power suggestion 1-14 with accuracy (NOT 100%)
+    // Humanized accuracy 50-85% (we don't allow 100% bot)
+    NSString *accText = accuracy >= 85 ? @"HIGH" : accuracy >= 70 ? @"MED" : @"LOW";
+    self.powerLabel.text = [NSString stringWithFormat:@"⚡ Power: %.1f/14\n🎯 Acc: %.0f%% %@\n👤 Humanized", power, accuracy, accText];
+    self.powerLabel.hidden = NO;
+    
+    // Color based on power
+    if (power < 4) {
+        self.powerLabel.textColor = [UIColor greenColor];
+    } else if (power < 8) {
+        self.powerLabel.textColor = [UIColor yellowColor];
+    } else if (power < 11) {
+        self.powerLabel.textColor = [UIColor orangeColor];
+    } else {
+        self.powerLabel.textColor = [UIColor redColor];
+    }
+}
+
+- (void)showAutoShotIndicator:(BOOL)show {
+    ModMenu *menu = [ModMenu sharedMenu];
+    if (!menu.autoShotEnabled) {
+        self.autoShotIndicator.hidden = YES;
+        return;
+    }
+    self.autoShotIndicator.hidden = !show;
+    if (show) {
+        // Blink animation for auto shot
+        [UIView animateWithDuration:0.5 animations:^{
+            self.autoShotIndicator.alpha = 0.3;
+        } completion:^(BOOL finished) {
+            [UIView animateWithDuration:0.5 animations:^{
+                self.autoShotIndicator.alpha = 1.0;
+            }];
+        }];
+    }
 }
 
 @end

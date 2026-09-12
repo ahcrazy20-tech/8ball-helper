@@ -198,35 +198,71 @@ static BOOL g_isValidBundle = NO;
             
             ModMenu *menu = [ModMenu sharedMenu];
             
-            // ==================== BALL-BY-BALL MODE (YOUR SAFETY REQUEST) ====================
-            // This is SAFEST: user selects one ball and one pocket, no auto search for 3 balls
-            // Option to enable 3-ball combo chain is OFF by default
+            // ==================== BALL-BY-BALL MODE (YOUR SAFETY REQUEST) + AUTO POWER ====================
+            // SAFEST: ball-by-ball ON by default, no auto 3-ball, auto power suggestion with humanized accuracy (NOT 100%)
             
             if (menu.ballByBallMode) {
-                // Ball-by-ball: if user has selection, use it, otherwise use placeholder
                 CGPoint target = self.hasSelection ? self.selectedTarget : baseTarget;
                 CGPoint pocket = self.hasSelection ? self.selectedPocket : basePocket;
                 
-                NSDictionary *singleShot = [PoolPredictor calculateSingleBallShot:baseCue target:target pocket:pocket radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS];
-                NSMutableDictionary *shotWithCue = [singleShot mutableCopy];
-                shotWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
+                // Calculate shot with power suggestion and humanized accuracy (75% default, NOT 100% bot)
+                CGFloat accuracy = menu.powerAccuracy > 0 ? menu.powerAccuracy : DEFAULT_POWER_ACCURACY;
+                NSDictionary *shotWithPower = [PoolPredictor calculateShotWithPower:baseCue target:target pocket:pocket radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS accuracy:accuracy];
+                CGPoint ghost = [shotWithPower[@"ghost"] CGPointValue];
+                CGFloat suggestedPower = [shotWithPower[@"suggestedPower"] floatValue];
                 
-                [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:[singleShot[@"shot"][@"ghost"] CGPointValue] target:target pocket:pocket];
+                [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:target pocket:pocket];
                 
-                // Cue leave & scratch warning if enabled (Wizard features)
+                // Auto power suggestion (safe, ON by default) - shows power 1-14 with humanized accuracy
+                if (menu.autoPowerEnabled) {
+                    [[OverlayWindow shared] drawPowerSuggestion:suggestedPower accuracy:accuracy];
+                }
+                
+                // Auto power adjust - auto-adjust power slider to suggested (with jitter) - OFF by default, risky
+                if (menu.autoPowerAdjustEnabled) {
+                    // In real implementation, hook Unity's power slider and set value
+                    // Here we just show indicator - actual hook would need Il2Cpp offset for CueController power
+                    // For safety, we add random delay and jitter
+                    float delay = RandomFloat(0.5, 1.5);
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        SafeLog(@"Auto power adjust to %.1f with %.0f%% accuracy", suggestedPower, accuracy);
+                        // Hook would go here: set power slider to suggestedPower
+                    });
+                }
+                
+                // Auto shot assist - auto shot with suggested power - OFF by default, most risky
+                if (menu.autoShotEnabled) {
+                    [[OverlayWindow shared] showAutoShotIndicator:YES];
+                    // Safety: add random delay 1-2.5s and humanized accuracy, NOT instant 100% bot
+                    float shotDelay = RandomFloat(1.0, 2.5);
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(shotDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if (![OverlayWindow shared].helperEnabled || [[ModMenu sharedMenu] isVisible]) {
+                            [[OverlayWindow shared] showAutoShotIndicator:NO];
+                            return;
+                        }
+                        SafeLog(@"Auto shot assist: power %.1f accuracy %.0f%% - humanized, NOT 100%%", suggestedPower, accuracy);
+                        // In real game, you would hook shoot button and trigger with humanized power
+                        // For safety, we DON'T auto-shoot here - we just show indicator and let user shoot manually
+                        // If you want true auto-shoot, uncomment below but WARNING: highly detectable
+                        /*
+                        // Find shoot button and simulate touch with humanized power
+                        // This is where 100% bot would be - we use humanized power with jitter instead
+                        */
+                        [[OverlayWindow shared] showAutoShotIndicator:NO];
+                    });
+                } else {
+                    [[OverlayWindow shared] showAutoShotIndicator:NO];
+                }
+                
+                // Cue leave & scratch warning
                 if (menu.cueLeaveEnabled || menu.scratchWarningEnabled) {
-                    CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:[singleShot[@"shot"][@"ghost"] CGPointValue] target:target pocket:pocket power:DEFAULT_CUE_POWER tableBounds:tableBounds];
+                    CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:ghost target:target pocket:pocket power:suggestedPower tableBounds:tableBounds];
                     BOOL isScratch = [PoolPredictor isScratch:cueLeave pockets:pockets radius:DEFAULT_POCKET_RADIUS];
                     [[OverlayWindow shared] drawCueLeave:cueLeave isScratch:isScratch];
                 }
                 
-                // Info HUD
-                if (menu.infoHUDEnabled) {
-                    // Handled in OverlayWindow
-                }
-                
             } else {
-                // Auto mode: Best shot solver (Wizard feature) - more detectable, OFF by default
+                // Auto mode: Best shot solver
                 if (menu.bestShotEnabled) {
                     NSDictionary *best = [PoolPredictor findBestShot:baseCue balls:balls pockets:pockets radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS maxAngle:menu.maxAngle > 0 ? menu.maxAngle : SAFETY_MAX_ANGLE];
                     if (best) {
@@ -234,45 +270,52 @@ static BOOL g_isValidBundle = NO;
                         bestWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
                         [[OverlayWindow shared] drawBestShot:bestWithCue];
                         
-                        // Bank shot alternative if enabled
+                        // Power suggestion for best shot
+                        if (menu.autoPowerEnabled) {
+                            CGPoint target = [best[@"target"] CGPointValue];
+                            CGPoint pocket = [best[@"pocket"] CGPointValue];
+                            CGPoint ghost = [best[@"shot"][@"ghost"] CGPointValue];
+                            CGFloat accuracy = menu.powerAccuracy > 0 ? menu.powerAccuracy : DEFAULT_POWER_ACCURACY;
+                            CGFloat power = [PoolPredictor calculateSuggestedPower:baseCue ghost:ghost target:target pocket:pocket accuracy:accuracy];
+                            [[OverlayWindow shared] drawPowerSuggestion:power accuracy:accuracy];
+                        }
+                        
                         if (menu.bankShotsEnabled) {
                             NSDictionary *bank = [PoolPredictor findBestBankShot:baseCue balls:balls pockets:pockets tableBounds:tableBounds radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS];
                             if (bank) {
                                 NSMutableDictionary *bankWithCue = [bank mutableCopy];
                                 bankWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
-                                // Only show bank if better than direct? For now show if best not found or as alternative
-                                // We already drew best, bank is extra
                                 [[OverlayWindow shared] drawBankShot:bankWithCue];
                             }
                         }
                         
-                        // Cue leave for best shot
                         if (menu.cueLeaveEnabled || menu.scratchWarningEnabled) {
                             CGPoint ghost = [best[@"shot"][@"ghost"] CGPointValue];
                             CGPoint target = [best[@"target"] CGPointValue];
                             CGPoint pocket = [best[@"pocket"] CGPointValue];
-                            CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:ghost target:target pocket:pocket power:DEFAULT_CUE_POWER tableBounds:tableBounds];
+                            CGFloat power = menu.suggestedPower > 0 ? menu.suggestedPower : 5;
+                            CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:ghost target:target pocket:pocket power:power tableBounds:tableBounds];
                             BOOL isScratch = [PoolPredictor isScratch:cueLeave pockets:pockets radius:DEFAULT_POCKET_RADIUS];
                             [[OverlayWindow shared] drawCueLeave:cueLeave isScratch:isScratch];
                         }
                     }
                 } else {
-                    // No best shot, just show placeholder single ball
                     CGPoint ghost = [PoolPredictor ghostBallForTarget:baseTarget pocket:basePocket radius:12];
                     [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+                    if (menu.autoPowerEnabled) {
+                        CGFloat accuracy = menu.powerAccuracy > 0 ? menu.powerAccuracy : DEFAULT_POWER_ACCURACY;
+                        CGFloat power = [PoolPredictor calculateSuggestedPower:baseCue ghost:ghost target:baseTarget pocket:basePocket accuracy:accuracy];
+                        [[OverlayWindow shared] drawPowerSuggestion:power accuracy:accuracy];
+                    }
                 }
                 
-                // Combo chain - 3 balls in one shot - RISKY, only if enabled (your option)
                 if (menu.comboChainEnabled) {
-                    // This is the feature you asked: option to do 3-ball chain, but OFF by default for safety
                     NSArray *chains = [PoolPredictor findComboChain:baseCue balls:balls pockets:pockets radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS maxBalls:menu.comboChainEnabled ? MAX_COMBO_BALLS : 1];
                     if (chains.count > 0) {
                         [[OverlayWindow shared] drawComboChain:chains];
                     }
                 }
             }
-            
-            // Long guidelines already handled in drawPredictionFromCue if enabled
         });
         
     } @catch (NSException* e) {

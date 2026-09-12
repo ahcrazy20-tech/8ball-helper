@@ -1,7 +1,6 @@
 #import <UIKit/UIKit.h>
 #import "Config.h"
 
-// Innocent name for stealth
 #if USE_INNOCENT_CLASS_NAMES
 #define ModMenu _UIFeedbackMenu
 #endif
@@ -14,23 +13,28 @@
 - (void)toggle;
 - (BOOL)isVisible;
 
-// Settings that can be toggled
-@property (nonatomic, assign) BOOL ballByBallMode;          // Safety: ball by ball, not 3-ball combo
+@property (nonatomic, assign) BOOL ballByBallMode;
 @property (nonatomic, assign) BOOL bestShotEnabled;
 @property (nonatomic, assign) BOOL bankShotsEnabled;
 @property (nonatomic, assign) BOOL cueLeaveEnabled;
 @property (nonatomic, assign) BOOL scratchWarningEnabled;
-@property (nonatomic, assign) BOOL comboChainEnabled;       // 3-ball chain - OFF by default for safety
+@property (nonatomic, assign) BOOL comboChainEnabled;
 @property (nonatomic, assign) BOOL infoHUDEnabled;
 @property (nonatomic, assign) BOOL longGuidelinesEnabled;
+
+// Auto power suggestion (safer auto shot)
+@property (nonatomic, assign) BOOL autoPowerEnabled;        // Show suggested power (safe, ON by default)
+@property (nonatomic, assign) BOOL autoPowerAdjustEnabled;  // Auto-adjust power slider (OFF by default, risky)
+@property (nonatomic, assign) BOOL autoShotEnabled;         // Auto shot assist (OFF by default, most risky)
+@property (nonatomic, assign) float powerAccuracy;          // 50-85% (not 100%), human-like
+@property (nonatomic, assign) float suggestedPower;         // 1-14
 
 @property (nonatomic, assign) float lineThickness;
 @property (nonatomic, assign) float ballRadius;
 @property (nonatomic, assign) float humanizationJitter;
 @property (nonatomic, assign) float maxAngle;
 
-// Table calibration
-@property (nonatomic, assign) CGRect tableBoundsOffset; // manual offset for newest version support
+@property (nonatomic, assign) CGRect tableBoundsOffset;
 
 - (void)saveSettings;
 - (void)loadSettings;

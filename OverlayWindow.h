@@ -11,19 +11,18 @@
 - (void)clear;
 - (void)panicHide;
 
-// Core drawing - ball-by-ball mode (safe)
 - (void)drawPredictionFromCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket;
-- (void)drawSingleBallShot:(NSDictionary*)shotData; // Ball-by-ball mode
-
-// Wizard/Ninja features
-- (void)drawBestShot:(NSDictionary*)bestShot; // Best shot solver
-- (void)drawBankShot:(NSDictionary*)bankShot; // Bank shot with cushion point
-- (void)drawCueLeave:(CGPoint)cueLeave isScratch:(BOOL)isScratch; // Cue leave + scratch warning
-- (void)drawComboChain:(NSArray*)chain; // 3-ball combo chain (risky, optional)
-- (void)drawCushionPath:(NSArray<NSValue*>*)path; // Bank cushion path
-
-// Table calibration for newest version
+- (void)drawSingleBallShot:(NSDictionary*)shotData;
+- (void)drawBestShot:(NSDictionary*)bestShot;
+- (void)drawBankShot:(NSDictionary*)bankShot;
+- (void)drawCueLeave:(CGPoint)cueLeave isScratch:(BOOL)isScratch;
+- (void)drawComboChain:(NSArray*)chain;
+- (void)drawCushionPath:(NSArray<NSValue*>*)path;
 - (void)updateTableBounds:(CGRect)bounds;
+
+// Auto power suggestion (safer auto shot)
+- (void)drawPowerSuggestion:(CGFloat)power accuracy:(CGFloat)accuracy;
+- (void)showAutoShotIndicator:(BOOL)show;
 
 @property (nonatomic, assign) BOOL helperEnabled;
 @property (nonatomic, assign) BOOL isPanicHidden;
@@ -51,6 +50,8 @@
 - (void)drawComboChain:(NSArray*)chain;
 - (void)drawCushionPath:(NSArray<NSValue*>*)path;
 - (void)updateTableBounds:(CGRect)bounds;
+- (void)drawPowerSuggestion:(CGFloat)power accuracy:(CGFloat)accuracy;
+- (void)showAutoShotIndicator:(BOOL)show;
 
 @property (nonatomic, assign) BOOL helperEnabled;
 @property (nonatomic, assign) BOOL isPanicHidden;

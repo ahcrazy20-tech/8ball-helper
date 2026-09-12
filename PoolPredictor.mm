@@ -463,22 +463,84 @@
 }
 
 + (CGRect)calibratedTableBounds:(CGRect)screenBounds manualOffset:(CGRect)offset {
-    // Support newest version with manual calibration
-    // Auto-detect table bounds with margins
     CGRect base = CGRectMake(screenBounds.origin.x + DEFAULT_TABLE_MARGIN_X,
                             screenBounds.origin.y + DEFAULT_TABLE_MARGIN_Y_TOP,
                             screenBounds.size.width - 2*DEFAULT_TABLE_MARGIN_X,
                             screenBounds.size.height - DEFAULT_TABLE_MARGIN_Y_TOP - DEFAULT_TABLE_MARGIN_Y_BOTTOM);
-    
-    // Apply manual offset if provided
     if (!CGRectEqualToRect(offset, CGRectZero)) {
         base.origin.x += offset.origin.x;
         base.origin.y += offset.origin.y;
         base.size.width += offset.size.width;
         base.size.height += offset.size.height;
     }
-    
     return base;
+}
+
+// ==================== AUTO POWER SUGGESTION (SAFER AUTO SHOT) ====================
+
++ (CGFloat)calculateSuggestedPower:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket accuracy:(CGFloat)accuracy {
+    // Power based on distance, like Wizard Cue Power 0-14
+    CGFloat distCue = hypot(cue.x - ghost.x, cue.y - ghost.y);
+    CGFloat distTarget = hypot(target.x - pocket.x, target.y - pocket.y);
+    CGFloat totalDist = distCue + distTarget;
+    
+    // Base power: distance * factor
+    CGFloat basePower = totalDist * POWER_DISTANCE_FACTOR;
+    
+    // Clamp 1-14 like Wizard
+    basePower = fmax(1.0, fmin(14.0, basePower));
+    
+    // Apply humanization based on accuracy (NOT 100%)
+    // Lower accuracy = more random miss
+    CGFloat humanized = [self humanizedPower:basePower accuracy:accuracy];
+    
+    return humanized;
+}
+
++ (CGFloat)humanizedPower:(CGFloat)power accuracy:(CGFloat)accuracy {
+    // Accuracy 50-85% (we don't allow 100% to avoid bot detection)
+    // Higher accuracy = less jitter
+    // Formula: jitter = (100 - accuracy) * factor + random
+    
+    CGFloat clampedAccuracy = fmax(MIN_POWER_ACCURACY, fmin(MAX_POWER_ACCURACY, accuracy));
+    CGFloat missFactor = (100.0 - clampedAccuracy) / 100.0; // 0.15 to 0.5
+    
+    // Base jitter ±1.2 * missFactor
+    CGFloat jitter = RandomFloat(-POWER_HUMANIZATION * missFactor, POWER_HUMANIZATION * missFactor);
+    
+    // Occasionally add bigger miss for lower accuracy (human-like)
+    if (clampedAccuracy < 70 && arc4random_uniform(10) == 0) {
+        jitter += RandomFloat(-2.0, 2.0);
+    }
+    
+    CGFloat result = power + jitter;
+    result = fmax(1.0, fmin(14.0, result));
+    return result;
+}
+
++ (NSDictionary*)calculateShotWithPower:(CGPoint)cue target:(CGPoint)target pocket:(CGPoint)pocket radius:(CGFloat)radius accuracy:(CGFloat)accuracy {
+    // Full shot with suggested power and humanized accuracy (NOT 100%)
+    NSDictionary *baseShot = [self calculateShotFromCue:cue target:target pocket:pocket radius:radius];
+    CGPoint ghost = [baseShot[@"ghost"] CGPointValue];
+    
+    CGFloat suggestedPower = [self calculateSuggestedPower:cue ghost:ghost target:target pocket:pocket accuracy:accuracy];
+    
+    // Humanize ghost based on accuracy
+    CGFloat accuracyFactor = (100.0 - accuracy) / 100.0;
+    CGFloat jitter = HUMAN_JITTER_PIXELS * (1.0 + accuracyFactor * 2.0);
+    CGPoint humanizedGhost = HumanizePoint(ghost, jitter);
+    
+    // Recalculate angle with humanized ghost
+    CGFloat angle = [self angleBetweenCue:cue ghost:humanizedGhost target:target pocket:pocket];
+    
+    NSMutableDictionary *result = [baseShot mutableCopy];
+    result[@"ghost"] = [NSValue valueWithCGPoint:humanizedGhost];
+    result[@"angle"] = @(angle);
+    result[@"suggestedPower"] = @(suggestedPower);
+    result[@"accuracy"] = @(accuracy);
+    result[@"isHumanized"] = @YES;
+    
+    return result;
 }
 
 @end
