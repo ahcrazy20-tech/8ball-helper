@@ -41,5 +41,9 @@
 
 @end
 
-@interface _UIFeedbackMenu : ModMenu
-@end
+// NOTE: do not add a subclass declaration for _UIFeedbackMenu here.
+// When USE_INNOCENT_CLASS_NAMES is on, the macro above already renames the
+// interface declared in this file to _UIFeedbackMenu, so declaring that same
+// class again (as its own superclass) makes clang fail with
+// "duplicate interface definition for class '_UIFeedbackMenu'" and
+// "trying to recursively use '_UIFeedbackMenu' as superclass of itself".
