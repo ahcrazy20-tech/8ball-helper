@@ -26,10 +26,16 @@
     NSString* bundleID = [[NSBundle mainBundle] bundleIdentifier];
     if (!bundleID) return NO;
     
-    // Only activate in 8 Ball Pool
-    if ([bundleID isEqualToString:TARGET_BUNDLE_1]) return YES;
-    if ([bundleID isEqualToString:TARGET_BUNDLE_2]) return YES;
-    if ([bundleID isEqualToString:TARGET_BUNDLE_3]) return YES;
+    // Only activate in 8 Ball Pool.
+    // TARGET_BUNDLE_* are plain C string literals in Config.h, so they must be
+    // boxed with @(...) to become NSString*. Writing `@TARGET_BUNDLE_1` expands
+    // to `@"com.miniclip.8ballpool"` (@" immediately followed by a string
+    // literal, which is invalid), and dropping the @ entirely fails with
+    // "string literal must be prefixed by '@'" because isEqualToString: needs
+    // an NSString, not a const char*.
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_1)]) return YES;
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_2)]) return YES;
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_3)]) return YES;
     
     // Also allow if bundle contains miniclip
     if ([bundleID containsString:@"miniclip"] && [bundleID containsString:@"8ball"]) return YES;
