@@ -1,4 +1,6 @@
 #import "PoolPredictor.h"
+#import "Config.h"
+#import "Stealth.h"
 #import <Vision/Vision.h>
 #import <CoreGraphics/CoreGraphics.h>
 #include <vector>
@@ -15,7 +17,14 @@
     dir.y /= len;
     
     // Ghost = target - dir * 2*radius
-    return CGPointMake(target.x - dir.x * radius * 2.0, target.y - dir.y * radius * 2.0);
+    CGPoint ghost = CGPointMake(target.x - dir.x * radius * 2.0, target.y - dir.y * radius * 2.0);
+    
+#if ENABLE_HUMANIZATION
+    // Add tiny humanization
+    ghost = HumanizePoint(ghost, HUMAN_JITTER_PIXELS * 0.5);
+#endif
+    
+    return ghost;
 }
 
 + (CGFloat)angleBetweenCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket {
@@ -28,7 +37,12 @@
     v2.x/=len2; v2.y/=len2;
     CGFloat dot = v1.x*v2.x + v1.y*v2.y;
     dot = fmax(-1.0, fmin(1.0, dot));
-    return acos(dot) * 180.0 / M_PI;
+    CGFloat angle = acos(dot) * 180.0 / M_PI;
+    
+#if ENABLE_HUMANIZATION
+    angle += RandomFloat(-HUMAN_ANGLE_NOISE, HUMAN_ANGLE_NOISE);
+#endif
+    return angle;
 }
 
 + (NSDictionary*)calculateShotFromCue:(CGPoint)cue target:(CGPoint)target pocket:(CGPoint)pocket radius:(CGFloat)radius {
@@ -55,8 +69,18 @@
             CGPoint pocket = [pVal CGPointValue];
             NSDictionary* shot = [self calculateShotFromCue:cue target:ball pocket:pocket radius:radius];
             CGFloat angle = [shot[@"angle"] floatValue];
-            if (angle > 60) continue; // too hard
+            
+            // Safety: skip very hard shots - more human to not attempt impossible shots
+            if (angle > 55) continue; // lowered from 60 to be safer
+            
+            // Score with humanization
             CGFloat score = angle + [shot[@"distCue"] floatValue]*0.01;
+            
+            // Add randomness to avoid always picking same ball (bot detection)
+#if ENABLE_HUMANIZATION
+            score += RandomFloat(-2.0, 2.0);
+#endif
+            
             if (score < bestScore) {
                 bestScore = score;
                 best = @{
@@ -71,14 +95,18 @@
     return best;
 }
 
++ (CGPoint)humanizedGhost:(CGPoint)ghost {
+#if ENABLE_HUMANIZATION
+    return HumanizePoint(ghost, HUMAN_JITTER_PIXELS);
+#else
+    return ghost;
+#endif
+}
+
 // Simple color-based detection - works without ML, replace with CoreML YOLO later
 + (NSDictionary*)detectBallsInImage:(UIImage*)screenshot tableBounds:(CGRect)bounds {
     // This is placeholder - in real dylib you'd use Vision or OpenCV
-    // For now we return empty and let Tweak.x use manual tap positions
-    // TODO: Implement with CVPixelBuffer + HSV filter similar to Python detector.py
-    
-    // Example using Vision to find circles would go here
-    // VNRecognizedTextObservation etc.
+    // For now we return estimated positions and let Tweak.x use manual calibration
     
     return @{
         @"cue": [NSValue valueWithCGPoint:CGPointMake(bounds.origin.x + bounds.size.width*0.2, bounds.origin.y + bounds.size.height*0.5)],
