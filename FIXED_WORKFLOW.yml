@@ -1,4 +1,4 @@
-name: Build Stealth Dylib
+name: Build Stealth Dylib - Wizard/Ninja Features + Ball-by-Ball Safety
 
 on:
   push:
@@ -30,11 +30,8 @@ jobs:
           fi
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "$HOME/theos/bin" >> $GITHUB_PATH
-          # Install dependencies
           brew install ldid dpkg xz 2>/dev/null || true
-          # Ensure sdks
           ls $HOME/theos/sdks/ || echo "No sdks yet"
-          # Download iPhoneOS SDK if needed
           if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ] && [ ! -d "$HOME/theos/sdks/iPhoneOS17.0.sdk" ]; then
             echo "[*] Downloading SDK..."
             curl -LO https://github.com/theos/sdks/archive/master.zip || true
@@ -47,63 +44,52 @@ jobs:
         run: |
           echo "THEOS=$THEOS"
           ls -la $HOME/theos || true
-          which ldid || echo "ldid not found, will use ldid from theos"
-          ls $HOME/theos/bin || true
+          which ldid || echo "ldid not found"
 
-      - name: Build dylib (Theos)
+      - name: Build dylib (Theos) - Wizard/Ninja + Ball-by-Ball Safety
         run: |
           set -e
           export THEOS=$HOME/theos
           export PATH=$THEOS/bin:$PATH
-          echo "THEOS=$THEOS"
-          # Clean
           make clean || true
-          # Build with stealth flags
           make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless -j$(sysctl -n hw.ncpu) || make FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          echo "Build done"
+          echo "Build done - Wizard/Ninja features included"
           find . -name "*.dylib" | head -20
           ls -lh .theos/obj/ || true
           ls -lh .theos/obj/debug/ || true
-          ls -lh .theos/obj/debug/arm64*/ || true
 
-      - name: Build fallback (direct clang, no Theos)
+      - name: Build fallback (direct clang)
         if: failure()
         run: |
-          echo "[*] Theos build failed, trying direct clang build..."
           chmod +x ./build.sh
-          ./build.sh || echo "Fallback also failed, but continue"
+          ./build.sh || echo "Fallback failed"
 
-      - name: Post-process dylib for stealth
+      - name: Post-process for stealth
         run: |
           set -e
           mkdir -p artifact
-          # Find all dylibs
           find . -name "*.dylib" -type f | while read f; do
             echo "Processing $f"
-            # Strip symbols
             xcrun strip -x "$f" || strip -x "$f" || true
-            # Remove PoolHelper string from filename -> rename to innocuous
             cp "$f" artifact/libUnityGraphics.dylib
-            cp "$f" artifact/libSwiftyHelper.dylib || true
+            cp "$f" artifact/libSwiftyPlugin.dylib || true
             cp "$f" artifact/
           done
-          # Also check .theos
           find .theos -name "*.dylib" -type f -exec cp {} artifact/ \; 2>/dev/null || true
-          # If deb exists
           find . -name "*.deb" -exec cp {} artifact/ \; 2>/dev/null || true
           ls -lh artifact/
-          # Check strings for leak
-          echo "=== Checking for suspicious strings (should be minimal) ==="
-          strings artifact/*.dylib | grep -i "poolhelper\|PoolHelper\|Tweak\|ghost" || echo "No obvious cheat strings found - GOOD"
-          # Check exports
-          echo "=== Exports ==="
-          nm -gU artifact/*.dylib | head -20 || true
-          otool -L artifact/*.dylib | head -30 || true
+          echo "=== Checking for leaked strings ==="
+          strings artifact/*.dylib | grep -i "poolhelper\|PoolHelper\|Tweak\|ghost" || echo "No obvious strings - GOOD"
+          echo "=== Features ==="
+          echo "Wizard: Best Shot, Bank, Cue Leave, Scratch, Combo Chain, Long Guidelines, Mod Menu"
+          echo "Ninja: Long Lines, Aim, Menu"
+          echo "Safety: Ball-by-Ball ON by default (no 3-ball), Combo OFF by default, option to enable"
+          echo "Support: Newest 56.29.x via vision detection"
 
       - name: Upload stealth dylib
         uses: actions/upload-artifact@v4
         with:
-          name: Stealth-Dylib-Undetectable
+          name: Stealth-Dylib-Wizard-Ninja-BallByBall
           path: artifact/
           retention-days: 30
 
