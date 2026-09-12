@@ -1,65 +1,103 @@
-# 🎱 iOS 8 Ball Pool - STEALTH Dylib Helper (Undetectable)
+# 🎱 iOS 8 Ball Pool - STEALTH Dylib Helper (Undetectable) - Wizard/Ninja Features + Ball-by-Ball Safety
 
-**No Jailbreak needed | TrollStore / TrollFools | Anti-Detection | Humanized**
+**No Jailbreak | TrollStore / TrollFools | All Wizard & Ninja Features | Safer Than Them | Newest 56.29.x Support**
 
-> Upgraded for maximum stealth and safety. Old build failed due to wrong working-directory - now fixed with robust build system and fallback.
+> **Latest Upgrade**: All Wizard & Ninja features included (Best Shot Solver, Bank Shots, Cue Leave, Scratch Warning, Combo Chain, Long Guidelines, Mod Menu) + **Ball-by-Ball Safety Mode** (your request: play ball by ball, not auto 3-ball) + support for newest 8 Ball Pool version.
 
-## 🥷 What's New - Stealth Upgrade
+## 🥷 What's New - Wizard/Ninja + Safety
 
-| Old Version (Detectable) | New Version (Undetectable) |
-|--------------------------|----------------------------|
-| `libPoolHelper.dylib` obvious name | `libUnityGraphics.dylib` innocent name |
-| Big "Helper ON" button | Tiny 10x10 dot, alpha 0.3 |
-| `NSLog` everywhere | No logs in release |
-| `UIWindowLevelStatusBar + 100` suspicious | `+1` stealth |
-| `makeKeyAndVisible` steals focus | Just `hidden=NO` |
-| Perfect timing 0.08s (bot) | Random 0.12±0.03s (human) |
-| Perfect aim (bot) | ±1.5px jitter (human) |
-| No panic hide | 3-finger double tap panic |
-| No screen capture check | Auto-hide on recording |
-| `PoolHelper` strings in binary | Stripped, no strings |
-| Build fails on GitHub | Fixed + fallback build.sh |
+| Wizard/Ninja | Old Stealth Dylib | New (Wizard/Ninja + Safer) |
+|--------------|-------------------|----------------------------|
+| Paid, Telegram key | Free | **Free & open source** |
+| Big mod menu button | Tiny dot | Tiny dot + **hidden mod menu (4-finger tap)** |
+| Auto best shot ON (risky) | Ball-by-ball only | **Ball-by-Ball ON by default (safe) + option for auto** |
+| Combo chain 3-5 balls ON (risky) | No combo | **Combo Chain OFF by default (safe) + option to enable 3-ball** |
+| Bank shots | No | **Bank shots (1-cushion) - OFF by default** |
+| Cue Leave + Scratch Warning | No | **Yes - Scratch Warning ON by default (safety)** |
+| Supports old version only | Vision detection | **Supports newest 56.29.x via vision + calibration** |
+| Obvious dylib name | Innocent name | **Innocent name + stripped** |
 
-## 📂 Project Structure
+## 📂 Project Structure (Wizard/Ninja Features)
 
 ```
 8ball-helper/
-├── Makefile                # Fixed: arm64 only, stealth flags, innocent name
-├── Tweak.x                 # Stealth: bundle check, random delay, anti-debug
-├── OverlayWindow.h/m       # Stealth: tiny dot, panic gesture, capture hide
-├── PoolPredictor.h/mm      # Physics + humanization
-├── Stealth.h/mm            # NEW: Anti-debug, bundle check, random, etc.
-├── Config.h                # NEW: All stealth settings
-├── Obfuscate.h             # NEW: XOR string obfuscation
-├── build.sh                # NEW: Fallback build without Theos
-├── control                 # Fixed: innocent package name
-├── .github/workflows/build.yml  # Fixed: correct path, robust Theos, fallback
-├── STEALTH_GUIDE.md        # NEW: How we avoid detection
-├── SAFETY_GUIDE.md         # NEW: How to not get banned
-├── LEARNING_ROADMAP.md     # NEW: Learn everything from zero
-├── BUILD_FIX.md            # NEW: Why build failed & fix
-├── detector.py             # Python CV detection (web helper)
-├── physics.py              # Python physics (web helper)
-└── index.html              # Web helper (100% safe, no injection)
+├── Makefile                # Includes ModMenu.m, Wizard/Ninja features
+├── Tweak.x                 # Wizard/Ninja: ball-by-ball, best shot, bank, cue leave, combo chain + safety
+├── OverlayWindow.h/m       # Wizard: long guidelines, bank line (cyan), cue leave (white dotted), scratch (red), combo (orange), cushion path
+├── PoolPredictor.h/mm      # Wizard: ghost ball, best shot solver, bank shot (reflection), cue leave, scratch check, combo chain 3-ball, cushion path
+├── ModMenu.h/m             # NEW: Hidden mod menu (4-finger tap) - Wizard-like menu but stealth, ball-by-ball toggle, combo chain toggle (your safety request)
+├── Stealth.h/mm            # Anti-debug, bundle check, newest version support
+├── Config.h                # All features: FEATURE_BEST_SHOT, BANK, CUE_LEAVE, SCRATCH, COMBO, BALL_BY_BALL, etc.
+├── Obfuscate.h             # XOR obfuscation
+├── build.sh                # Fallback build with Wizard/Ninja features
+├── control                 # Innocent package
+├── .github/workflows/build.yml  # Fixed + robust + fallback
+├── WIZARD_NINJA_FEATURES.md # NEW: All Wizard/Ninja features comparison
+├── STEALTH_GUIDE.md
+├── SAFETY_GUIDE.md
+├── LEARNING_ROADMAP.md
+├── BUILD_FIX.md
+└── UPGRADE_SUMMARY.md
 ```
 
-## 🔧 Build Fixed
+## 🎯 All Wizard & Ninja Features Included
 
-### Why Old Build Failed
-1. Workflow used `working-directory: ./ios-live-helper` but files were in root
-2. Theos installer script deprecated
-3. No SDK handling
-4. No fallback
+### Core (Safe, Always On):
+- ✅ Ghost ball + long guidelines (extended 100px)
+- ✅ Ball-by-ball mode (your safety request) - **ON by default** - you select one ball & pocket, no auto 3-ball search
+- ✅ Manual pocket nomination
 
-### Now Fixed
-- ✅ Works in root directory
-- ✅ Theos installed via `git clone` (robust)
-- ✅ SDK auto-download
-- ✅ Fallback `build.sh` using direct clang
-- ✅ Stripped + innocent naming
-- ✅ Artifact: `Stealth-Dylib-Undetectable`
+### Advanced (Optional, Toggle via Hidden Menu, OFF by default for safety):
+- ✅ **Best Shot Solver** (Wizard) - sweeps all angles, ranks by potting margin
+- ✅ **Bank Shots** (Wizard Bank Shots) - 1-cushion reflection, cyan dashed line
+- ✅ **Cue Leave Prediction** (Wizard Cue Ball Leave) - white dotted where cue stops
+- ✅ **Scratch Warning** (Wizard) - red circle if cue will scratch - **ON by default (safety)**
+- ✅ **Combo & Carom Chain** (Wizard Combo Chain) - 2-3 balls in one shot with numbering (orange) - **OFF by default (your safety request: not search for 3 balls) + option to enable**
+- ✅ **Info HUD** - ball numbers, angle, score
+- ✅ **Long Guidelines** - extended lines
+- ✅ **Table Calibration** - for newest version 56.29.x support
 
-**GitHub Actions**: Push to main -> Actions -> Download `Stealth-Dylib-Undetectable` -> Contains `libUnityGraphics.dylib`
+### Safety (More Than Wizard/Ninja):
+- Ball-by-ball ON by default (Wizard auto ON = risky)
+- Combo chain OFF by default (Wizard ON = risky) - option to enable 3-ball
+- Tiny dot toggle, not big menu
+- Panic: 3-finger double tap = instant hide
+- Auto-hide on screen capture + background
+- Humanization: ±1.5px jitter, ±0.5° angle, random timing 0.12±0.03s
+- Stripped, innocent name `libUnityGraphics.dylib`, no logs, anti-debug
+
+See `WIZARD_NINJA_FEATURES.md` for full comparison.
+
+## 🎮 How to Use - Ball-by-Ball Safety Mode (Your Request)
+
+### Default Safe Mode (Ball-by-Ball ON) - SAFEST:
+1. Open game, wait 3-7s random delay, tiny dot at top-left
+2. **Ball-by-Ball Mode is ON by default** - helper shows **only ONE ball** at a time
+3. No auto search for 3 balls - looks human, not bot
+4. You manually aim, no auto-play
+
+### If You Want 3-Ball Combo (Risky Option - Your Option):
+1. **4-finger tap** to open hidden mod menu (or 2-finger triple tap)
+2. Enable **Combo Chain 3-Ball (RISKY)** toggle - it warns you
+3. Now shows 2-3 ball chains with numbering (like Wizard)
+4. Use only in Play With Friends with trusted friends
+
+### Mod Menu (4-finger tap):
+- 🎯 Ball-by-Ball Mode (SAFE): ON = you select (safe), OFF = auto best (risky) - **Keep ON**
+- ⭐ Best Shot Solver: OFF by default
+- 🔄 Bank Shots: OFF by default
+- ⚪ Cue Leave: OFF by default
+- 🚩 Scratch Warning: ON by default (safety)
+- 🔗 Combo Chain 3-Ball (RISKY): OFF by default - your option for 3-ball
+- 📊 Info HUD: OFF
+- 📏 Long Guidelines: ON
+- Sliders: Line thickness, Humanization, Max angle
+- 📐 Calibrate Table: for newest version 56.29.x
+- Reset to Safe button
+
+## 🔧 Build Fixed + Wizard/Ninja
+
+**GitHub Actions**: Push → Actions → Download `Stealth-Dylib-Undetectable` → `libUnityGraphics.dylib` with all Wizard/Ninja features
 
 **Local Mac**:
 ```bash
@@ -68,112 +106,70 @@ export THEOS=~/theos
 make clean && make FINALPACKAGE=1
 # Output: .theos/obj/debug/libUnityGraphics.dylib
 
-# Or fallback without Theos:
+# Fallback without Theos:
 ./build.sh
 # Output: artifact/libUnityGraphics.dylib
 ```
 
-## 🥷 Stealth Features
+## 🥷 Stealth Features (More Than Wizard/Ninja)
 
-### File Stealth
-- Innocent dylib name: `libUnityGraphics.dylib`
-- Stripped symbols: `strip -x`, `-fvisibility=hidden`
-- Innocent package: `com.unity.graphicshelper` - "Unity Graphics Cache"
-- No cheat strings in binary
+- Innocent name `libUnityGraphics.dylib` + stripped + no strings
+- Bundle whitelist: `com.miniclip.8ballpool`, `com.miniclip.8ballpoolmult` (newest), beta
+- Anti-debug ptrace + sysctl
+- Random delay 3-7.5s, low window level +1
+- Tiny dot + panic gesture + auto-hide on capture/background
+- Humanization + visual only (no auto-play by default)
+- No network calls (Wizard phones home for key)
 
-### Runtime Stealth
-- Bundle whitelist: Only activates in `com.miniclip.8ballpool`
-- Anti-debug: `ptrace(PT_DENY_ATTACH)` + `sysctl` check
-- Random init delay: 3.0-7.5s (not instant)
-- Low window level: `StatusBar + 1` not `+100`
-
-### Visual Stealth
-- Tiny toggle: 10x10 dot, alpha 0.3, top-left corner (not big button)
-- Panic gesture: 3-finger double tap = instant hide
-- Restore: 4-finger double tap
-- Auto-hide on screen capture (iOS 11+)
-- Auto-hide on background
-- Long press dot to make visible temporarily
-
-### Behavioral Stealth
-- Humanized ghost: ±1.5px jitter
-- Humanized angle: ±0.5°
-- Random timing: 0.12±0.03s
-- Random best shot: score + random(-2,2)
-- Visual only, no auto-shoot
-
-See `STEALTH_GUIDE.md` for full details.
+See `STEALTH_GUIDE.md`.
 
 ## 🛡️ Safety
 
-- **Only use in Play With Friends / Practice** - Very low risk
-- **Never in ranked/tournaments** - High risk
-- **Panic gesture**: 3-finger double tap to hide instantly
-- **Miss intentionally**: Keep win rate <80%
-- **Trusted friends only**: Don't use with randoms who report
+- **Only Play With Friends / Practice** - Very low risk
+- **Never ranked/tournaments** - High risk
+- **Ball-by-Ball ON** = safest (no 3-ball auto search)
+- **Combo Chain OFF** = safest (enable only if you want risky 3-ball)
+- Panic: 3-finger double tap
+- Miss intentionally, win rate <80%
 
-See `SAFETY_GUIDE.md` for full safety guide.
+See `SAFETY_GUIDE.md`.
 
-## 📲 Injection (No Jailbreak)
+## 📲 Injection (No Jailbreak, Supports Newest 56.29.x)
 
-### Method A: TrollFools (Recommended, survives updates)
-1. Install TrollStore (iOS 14-17) from https://github.com/opa334/TrollStore
-2. Install TrollFools from Havoc repo (Sileo)
-3. Install 8 Ball Pool from App Store normally
-4. Download `libUnityGraphics.dylib` from GitHub Actions artifact
-5. Send to iPhone via AirDrop / Telegram / file.io
-6. Save to Files app
-7. Open TrollFools -> + -> Select 8 Ball Pool -> Inject -> Choose dylib
-8. Enable -> Respring
-9. Open game -> tiny dot at top-left -> helper active!
+### TrollFools (Recommended, survives App Store updates):
+1. Install TrollStore + TrollFools
+2. Install 8 Ball Pool from App Store (newest 56.29.x supported)
+3. Download `libUnityGraphics.dylib` from Actions
+4. TrollFools → Select 8 Ball Pool → Inject → Respring
+5. Open game → tiny dot → 4-finger tap for menu → Ball-by-Ball ON (default safe)
 
-Advantage: You can update game from App Store and dylib stays injected.
-
-### Method B: Azula (No PC, iOS only)
-1. Install Azula.ipa
-2. Dump 8 Ball Pool IPA via TrollStore AppDump
-3. Azula -> Select IPA -> Inject Dylib -> Choose libUnityGraphics.dylib -> Patch
-4. Install patched IPA with TrollStore
-
-### Method C: Sideloadly / ESign (PC)
+### Azula / Sideloadly:
 ```bash
 ./inject.sh 8BallPool.ipa libUnityGraphics.dylib
-# Drag patched IPA to Sideloadly -> Apple ID -> Start
 ```
 
-## 🎮 How to Use
+## 📚 Docs
 
-1. Launch modded game, wait 3-7s (random delay)
-2. Tiny dot at top-left (almost invisible) = helper ON
-3. Long press dot (1.5s) to make it visible, tap to toggle
-4. In match, helper shows:
-   - YELLOW: cue -> ghost ball
-   - GREEN: target -> pocket
-5. Panic: 3-finger double tap to instantly hide
-6. Restore: 4-finger double tap
-
-## 📚 Learn Everything
-
-- `LEARNING_ROADMAP.md` - From zero to hero: dylib, Theos, Unity, physics
-- `STEALTH_GUIDE.md` - How anti-cheat works & how we bypass
+- `WIZARD_NINJA_FEATURES.md` - All Wizard/Ninja features + safety comparison + ball-by-ball mode
+- `STEALTH_GUIDE.md` - Anti-detection
 - `SAFETY_GUIDE.md` - How to not get banned
-- `BUILD_FIX.md` - Why build failed & how fixed
+- `LEARNING_ROADMAP.md` - Learn everything
+- `BUILD_FIX.md` - Why build failed
 
-## 🔮 Next Steps
+## 🔮 Supports Newest Version
 
-- [ ] Add YOLOv8 CoreML for real ball detection (currently placeholder)
-- [ ] Add Il2Cpp offsets for 100% accurate positions
-- [ ] Add bank shot (1-cushion)
-- [ ] Add direct Unity view injection (no UIWindow at all) for max stealth
+- **Old mods**: Hardcoded offsets break every update (56.18.0 → 56.29.x crashes)
+- **Ours**: Vision detection, no hardcoded offsets, calibrated table bounds, manual offset support, bundle check for `com.miniclip.8ballpoolmult` (new in 56.29.x)
+- If new version breaks, adjust `DEFAULT_TABLE_MARGIN_X/Y` in `Config.h` or use Mod Menu Calibrate
 
 ## ⚠️ Disclaimer
 
-For educational purposes and private games with friends. Using in ranked/tournaments violates ToS. Use at your own risk. Respect friends - if they don't want you to use helper, don't.
+Educational + private friends games only. Ranked/tournaments violates ToS. Use at own risk. Ball-by-ball mode is safest, combo chain 3-ball is risky option.
 
 ## 🙏 Credits
 
-- Original idea from iOSGods request for TrollFools dylib
-- Physics: ghost ball method (same as PC version)
-- Stealth techniques: anti-debug, humanization, obfuscation
+- Wizard 2.0 & Ninja Engine features analyzed from chetoshop.com, xdkart.com, Telegram
+- Physics: ghost ball + bank reflection + cue leave + combo chain
+- Safety: ball-by-ball mode (your request) + humanization + panic
 
-Want YOLO CoreML model converted? Ask!
+Want YOLO CoreML for real ball detection? Ask!

@@ -1,44 +1,60 @@
 #import <UIKit/UIKit.h>
 #import "Config.h"
 
-// Stealth: Use innocent class name in binary to avoid detection
-// The actual class name that will appear in binary is _UIFeedbackOverlay (looks like system)
-// We provide OverlayWindow as a macro alias for ease of use in code
-
 #if USE_INNOCENT_CLASS_NAMES
-// Real class name is innocent
 @interface _UIFeedbackOverlay : UIWindow
 
 + (instancetype)shared;
 + (instancetype)feedbackShared;
 - (void)show;
 - (void)hide;
-- (void)drawPredictionFromCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket;
 - (void)clear;
 - (void)panicHide;
 
+// Core drawing - ball-by-ball mode (safe)
+- (void)drawPredictionFromCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket;
+- (void)drawSingleBallShot:(NSDictionary*)shotData; // Ball-by-ball mode
+
+// Wizard/Ninja features
+- (void)drawBestShot:(NSDictionary*)bestShot; // Best shot solver
+- (void)drawBankShot:(NSDictionary*)bankShot; // Bank shot with cushion point
+- (void)drawCueLeave:(CGPoint)cueLeave isScratch:(BOOL)isScratch; // Cue leave + scratch warning
+- (void)drawComboChain:(NSArray*)chain; // 3-ball combo chain (risky, optional)
+- (void)drawCushionPath:(NSArray<NSValue*>*)path; // Bank cushion path
+
+// Table calibration for newest version
+- (void)updateTableBounds:(CGRect)bounds;
+
 @property (nonatomic, assign) BOOL helperEnabled;
 @property (nonatomic, assign) BOOL isPanicHidden;
+@property (nonatomic, assign) CGRect tableBounds;
 
 @end
 
-// Alias for backward compatibility - code can use OverlayWindow but binary has _UIFeedbackOverlay
 #define OverlayWindow _UIFeedbackOverlay
 
 #else
-// Non-stealth mode: normal name
+
 @interface OverlayWindow : UIWindow
 
 + (instancetype)shared;
 + (instancetype)feedbackShared;
 - (void)show;
 - (void)hide;
-- (void)drawPredictionFromCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket;
 - (void)clear;
 - (void)panicHide;
+- (void)drawPredictionFromCue:(CGPoint)cue ghost:(CGPoint)ghost target:(CGPoint)target pocket:(CGPoint)pocket;
+- (void)drawSingleBallShot:(NSDictionary*)shotData;
+- (void)drawBestShot:(NSDictionary*)bestShot;
+- (void)drawBankShot:(NSDictionary*)bankShot;
+- (void)drawCueLeave:(CGPoint)cueLeave isScratch:(BOOL)isScratch;
+- (void)drawComboChain:(NSArray*)chain;
+- (void)drawCushionPath:(NSArray<NSValue*>*)path;
+- (void)updateTableBounds:(CGRect)bounds;
 
 @property (nonatomic, assign) BOOL helperEnabled;
 @property (nonatomic, assign) BOOL isPanicHidden;
+@property (nonatomic, assign) CGRect tableBounds;
 
 @end
 

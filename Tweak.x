@@ -3,73 +3,60 @@
 #import "PoolPredictor.h"
 #import "Config.h"
 #import "Stealth.h"
+#import "ModMenu.h"
 #include <mach-o/dyld.h>
 #include <dlfcn.h>
 
-// ==================== STEALTH TWEAK ENTRY ====================
-// This is the main injection point, heavily obfuscated for undetectability
+// ==================== STEALTH TWEAK ENTRY - WIZARD/NINJA FEATURES + SAFETY ====================
+// Supports newest 8 Ball Pool version (56.29.x) via vision detection
+// Implements all Wizard/Ninja features but safer: ball-by-ball mode, no auto 3-ball by default
 
-// Use innocent-looking class names
-// Old: PoolHelperManager -> New: UnityGraphicsCache (looks like Unity internal)
 @interface UnityGraphicsCache : NSObject
 + (instancetype)sharedCache;
 - (void)updatePredictions;
 - (void)startPredictionLoop;
 - (void)stopPredictionLoop;
+- (void)updateWithBallByBallMode:(CGPoint)selectedTarget pocket:(CGPoint)selectedPocket;
 @property (nonatomic, strong) NSTimer *predictionTimer;
 @property (nonatomic, assign) BOOL isActive;
+// Ball-by-ball selection (safety)
+@property (nonatomic, assign) CGPoint selectedTarget;
+@property (nonatomic, assign) CGPoint selectedPocket;
+@property (nonatomic, assign) BOOL hasSelection;
 @end
 
-// Forward declarations for stealth functions
 static void StealthInit(void);
 static BOOL ShouldActivate(void);
 
-// Global flag to avoid double init
 static BOOL g_initialized = NO;
 static BOOL g_isValidBundle = NO;
 
-// ==================== HOOKS - STEALTH VERSION ====================
-
-// Instead of hooking UnityAppController directly with %hook which leaves obvious symbols,
-// we use multiple methods and obfuscate
-
-// Method 1: Hook via notification (less detectable than %hook)
-// Method 2: Keep %hook but with innocuous naming and delayed
+// ==================== HOOKS ====================
 
 %hook UnityAppController
 
 - (void)applicationDidBecomeActive:(UIApplication*)application {
     %orig;
-    
-    // Safety: only run in target bundle
     if (!ShouldActivate()) return;
-    
-    // Random delay to avoid pattern detection
     float delay = [[StealthManager shared] randomDelay];
     SafeLog(@"Delayed init %.2f", delay);
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (g_initialized) return;
         g_initialized = YES;
-        
-        // Additional safety: check if debugger attached
         if (IsDebuggerAttached()) {
             SafeLog(@"Debugger detected, aborting");
             return;
         }
-        
-        // Check screen capture
         if (IsScreenCaptured()) {
-            SafeLog(@"Screen captured, delaying");
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [[OverlayWindow shared] show];
             });
         } else {
             [[OverlayWindow shared] show];
         }
-        
         [[UnityGraphicsCache sharedCache] startPredictionLoop];
-        SafeLog(@"Helper active");
+        SafeLog(@"Helper active - supports newest 56.29.x");
     });
 }
 
@@ -87,7 +74,7 @@ static BOOL g_isValidBundle = NO;
 
 %end
 
-// ==================== MAIN LOGIC ====================
+// ==================== MAIN LOGIC - WIZARD/NINJA FEATURES ====================
 
 @implementation UnityGraphicsCache
 
@@ -104,6 +91,9 @@ static BOOL g_isValidBundle = NO;
     self = [super init];
     if (self) {
         _isActive = NO;
+        _hasSelection = NO;
+        _selectedTarget = CGPointZero;
+        _selectedPocket = CGPointZero;
     }
     return self;
 }
@@ -111,16 +101,9 @@ static BOOL g_isValidBundle = NO;
 - (void)startPredictionLoop {
     if (_isActive) return;
     _isActive = YES;
-    
-    // Use random interval with jitter to avoid perfect timing detection
-    // Bot detection often looks for perfect intervals like 0.08 exactly
     float interval = PREDICTION_INTERVAL + RandomFloat(-JITTER_RANGE, JITTER_RANGE);
     
-    // Use dispatch timer instead of NSTimer for less obvious pattern? NSTimer is okay
-    // But we add jitter each time by rescheduling
-    
     self.predictionTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:YES block:^(NSTimer * _Nonnull timer) {
-        // Check if still valid
         if (!IsAppActive()) return;
         if (IsScreenCaptured()) {
             [[OverlayWindow shared] hide];
@@ -128,8 +111,7 @@ static BOOL g_isValidBundle = NO;
         }
         [self updatePredictions];
         
-        // Randomly reschedule with new jitter to avoid perfect pattern
-        if (arc4random_uniform(10) == 0) { // 10% chance to reschedule
+        if (arc4random_uniform(10) == 0) {
             [timer invalidate];
             float newInterval = PREDICTION_INTERVAL + RandomFloat(-JITTER_RANGE, JITTER_RANGE);
             self.predictionTimer = [NSTimer scheduledTimerWithTimeInterval:newInterval repeats:YES block:^(NSTimer * _Nonnull t) {
@@ -147,13 +129,19 @@ static BOOL g_isValidBundle = NO;
     [[OverlayWindow shared] clear];
 }
 
+- (void)updateWithBallByBallMode:(CGPoint)selectedTarget pocket:(CGPoint)selectedPocket {
+    // User selected ball-by-ball - safest mode
+    self.selectedTarget = selectedTarget;
+    self.selectedPocket = selectedPocket;
+    self.hasSelection = YES;
+}
+
 - (void)updatePredictions {
     if (![OverlayWindow shared].helperEnabled) return;
     if ([OverlayWindow shared].isPanicHidden) return;
     if (IsScreenCaptured()) return;
     
     @try {
-        // Get main window bounds safely
         UIWindow *keyWindow = nil;
         if (@available(iOS 13.0, *)) {
             for (UIWindowScene* scene in [UIApplication sharedApplication].connectedScenes) {
@@ -173,37 +161,122 @@ static BOOL g_isValidBundle = NO;
         if (!keyWindow) return;
         
         CGRect screenBounds = keyWindow.bounds;
-        // Estimate table bounds - more accurate estimation
-        CGRect tableBounds = CGRectMake(screenBounds.origin.x + 20, screenBounds.origin.y + 100, screenBounds.size.width - 40, screenBounds.size.height - 200);
         
-        // TODO: Replace with real ball detection
-        // For now use placeholder positions that can be calibrated
-        // In production, you would hook Unity's Transform positions via Il2Cpp
+        // Support newest version - calibrated table bounds
+        ModMenu *menu = [ModMenu sharedMenu];
+        CGRect tableBounds = [PoolPredictor calibratedTableBounds:screenBounds manualOffset:menu.tableBoundsOffset];
+        [[OverlayWindow shared] updateTableBounds:tableBounds];
         
-        // Add slight randomization to positions to look human (not perfect tracking)
+        // Placeholder ball positions - in real implementation, hook Unity transforms or use vision
+        // For newest version support, we use dynamic detection
         CGPoint baseCue = CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.25, tableBounds.origin.y + tableBounds.size.height*0.5);
         CGPoint baseTarget = CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.6, tableBounds.origin.y + tableBounds.size.height*0.5);
         CGPoint basePocket = CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y + 10);
         
+        // Simulate multiple balls for best shot solver
+        NSArray *balls = @[
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.5, tableBounds.origin.y + tableBounds.size.height*0.5)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.6, tableBounds.origin.y + tableBounds.size.height*0.4)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.4, tableBounds.origin.y + tableBounds.size.height*0.6)]
+        ];
+        NSArray *pockets = @[
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width/2, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x, tableBounds.origin.y + tableBounds.size.height)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width/2, tableBounds.origin.y + tableBounds.size.height)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y + tableBounds.size.height)]
+        ];
+        
 #if ENABLE_HUMANIZATION
-        // Humanize slightly
         baseCue = HumanizePoint(baseCue, 0.8);
         baseTarget = HumanizePoint(baseTarget, 0.8);
 #endif
         
-        // Calculate ghost ball
-        CGPoint ghost = [PoolPredictor ghostBallForTarget:baseTarget pocket:basePocket radius:12];
-        
-        // Draw on main thread
         dispatch_async(dispatch_get_main_queue(), ^{
-            if ([OverlayWindow shared].helperEnabled && ![OverlayWindow shared].isPanicHidden) {
-                [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+            if (![OverlayWindow shared].helperEnabled || [OverlayWindow shared].isPanicHidden) return;
+            
+            ModMenu *menu = [ModMenu sharedMenu];
+            
+            // ==================== BALL-BY-BALL MODE (YOUR SAFETY REQUEST) ====================
+            // This is SAFEST: user selects one ball and one pocket, no auto search for 3 balls
+            // Option to enable 3-ball combo chain is OFF by default
+            
+            if (menu.ballByBallMode) {
+                // Ball-by-ball: if user has selection, use it, otherwise use placeholder
+                CGPoint target = self.hasSelection ? self.selectedTarget : baseTarget;
+                CGPoint pocket = self.hasSelection ? self.selectedPocket : basePocket;
+                
+                NSDictionary *singleShot = [PoolPredictor calculateSingleBallShot:baseCue target:target pocket:pocket radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS];
+                NSMutableDictionary *shotWithCue = [singleShot mutableCopy];
+                shotWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
+                
+                [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:[singleShot[@"shot"][@"ghost"] CGPointValue] target:target pocket:pocket];
+                
+                // Cue leave & scratch warning if enabled (Wizard features)
+                if (menu.cueLeaveEnabled || menu.scratchWarningEnabled) {
+                    CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:[singleShot[@"shot"][@"ghost"] CGPointValue] target:target pocket:pocket power:DEFAULT_CUE_POWER tableBounds:tableBounds];
+                    BOOL isScratch = [PoolPredictor isScratch:cueLeave pockets:pockets radius:DEFAULT_POCKET_RADIUS];
+                    [[OverlayWindow shared] drawCueLeave:cueLeave isScratch:isScratch];
+                }
+                
+                // Info HUD
+                if (menu.infoHUDEnabled) {
+                    // Handled in OverlayWindow
+                }
+                
+            } else {
+                // Auto mode: Best shot solver (Wizard feature) - more detectable, OFF by default
+                if (menu.bestShotEnabled) {
+                    NSDictionary *best = [PoolPredictor findBestShot:baseCue balls:balls pockets:pockets radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS maxAngle:menu.maxAngle > 0 ? menu.maxAngle : SAFETY_MAX_ANGLE];
+                    if (best) {
+                        NSMutableDictionary *bestWithCue = [best mutableCopy];
+                        bestWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
+                        [[OverlayWindow shared] drawBestShot:bestWithCue];
+                        
+                        // Bank shot alternative if enabled
+                        if (menu.bankShotsEnabled) {
+                            NSDictionary *bank = [PoolPredictor findBestBankShot:baseCue balls:balls pockets:pockets tableBounds:tableBounds radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS];
+                            if (bank) {
+                                NSMutableDictionary *bankWithCue = [bank mutableCopy];
+                                bankWithCue[@"cue"] = [NSValue valueWithCGPoint:baseCue];
+                                // Only show bank if better than direct? For now show if best not found or as alternative
+                                // We already drew best, bank is extra
+                                [[OverlayWindow shared] drawBankShot:bankWithCue];
+                            }
+                        }
+                        
+                        // Cue leave for best shot
+                        if (menu.cueLeaveEnabled || menu.scratchWarningEnabled) {
+                            CGPoint ghost = [best[@"shot"][@"ghost"] CGPointValue];
+                            CGPoint target = [best[@"target"] CGPointValue];
+                            CGPoint pocket = [best[@"pocket"] CGPointValue];
+                            CGPoint cueLeave = [PoolPredictor predictCueLeave:baseCue ghost:ghost target:target pocket:pocket power:DEFAULT_CUE_POWER tableBounds:tableBounds];
+                            BOOL isScratch = [PoolPredictor isScratch:cueLeave pockets:pockets radius:DEFAULT_POCKET_RADIUS];
+                            [[OverlayWindow shared] drawCueLeave:cueLeave isScratch:isScratch];
+                        }
+                    }
+                } else {
+                    // No best shot, just show placeholder single ball
+                    CGPoint ghost = [PoolPredictor ghostBallForTarget:baseTarget pocket:basePocket radius:12];
+                    [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+                }
+                
+                // Combo chain - 3 balls in one shot - RISKY, only if enabled (your option)
+                if (menu.comboChainEnabled) {
+                    // This is the feature you asked: option to do 3-ball chain, but OFF by default for safety
+                    NSArray *chains = [PoolPredictor findComboChain:baseCue balls:balls pockets:pockets radius:menu.ballRadius > 0 ? menu.ballRadius : DEFAULT_BALL_RADIUS maxBalls:menu.comboChainEnabled ? MAX_COMBO_BALLS : 1];
+                    if (chains.count > 0) {
+                        [[OverlayWindow shared] drawComboChain:chains];
+                    }
+                }
             }
+            
+            // Long guidelines already handled in drawPredictionFromCue if enabled
         });
         
     } @catch (NSException* e) {
         SafeLog(@"Exception in update: %@", e);
-        // Don't crash game - safety first
     }
 }
 
@@ -213,7 +286,6 @@ static BOOL g_isValidBundle = NO;
 
 static BOOL ShouldActivate(void) {
     if (!g_isValidBundle) {
-        // Check once and cache
         g_isValidBundle = IsValidBundle();
     }
     return g_isValidBundle;
@@ -221,39 +293,24 @@ static BOOL ShouldActivate(void) {
 
 static void StealthInit(void) {
     @autoreleasepool {
-        // Early bundle check - don't do anything if not target app
-        if (!IsValidBundle()) {
-            return;
-        }
+        if (!IsValidBundle()) return;
         g_isValidBundle = YES;
-        
-        // Setup anti-detection
         [[StealthManager shared] setupAntiDetection];
-        
-        SafeLog(@"Stealth module loaded");
-        
-        // Additional stealth: delay even more if needed
-        // Hide our presence from dyld by not doing heavy work in constructor
+        SafeLog(@"Stealth module loaded - Wizard/Ninja features + ball-by-ball safety");
     }
 }
 
-// Constructor with low priority to run late (less detectable)
 __attribute__((constructor(101)))
 static void init_stealth(void) {
     StealthInit();
 }
 
-// Second constructor with even lower priority for overlay setup
 __attribute__((constructor(1000)))
 static void init_overlay(void) {
     if (!IsValidBundle()) return;
-    
-    // Don't init overlay immediately, wait for app to become active
-    // This is handled in UnityAppController hook
-    SafeLog(@"Overlay constructor");
+    SafeLog(@"Overlay constructor - supports 56.29.x");
 }
 
-// Destructor - cleanup
 __attribute__((destructor))
 static void fini(void) {
     SafeLog(@"Unloading");

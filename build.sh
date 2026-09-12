@@ -1,12 +1,11 @@
 #!/bin/bash
 # build.sh - Fallback build without Theos, using direct clang
-# For stealth dylib building on GitHub Actions or Mac without Theos
+# Includes all Wizard/Ninja features + ball-by-ball safety + newest 56.29.x support
 
 set -e
 
-echo "[*] Building stealth dylib without Theos..."
+echo "[*] Building stealth dylib with Wizard/Ninja features..."
 
-# Find SDK
 SDK=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || echo "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk")
 if [ ! -d "$SDK" ]; then
     SDK=$(ls -d /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS*.sdk 2>/dev/null | head -1)
@@ -14,16 +13,8 @@ fi
 
 echo "[*] Using SDK: $SDK"
 
-# Output dir
 mkdir -p build
 mkdir -p artifact
-
-# Source files
-FILES="Tweak.x OverlayWindow.m PoolPredictor.mm Stealth.mm"
-
-# Convert .x to .m for clang (Logos syntax needs preprocessing, but we have plain ObjC now)
-# Our Tweak.x is mostly ObjC with %hook, which needs Logos. For fallback we need to use raw hooking
-# So we create a simplified version that uses manual hooking
 
 cat > build/fallback_tweak.m << 'EOF'
 #import <UIKit/UIKit.h>
@@ -33,6 +24,7 @@ cat > build/fallback_tweak.m << 'EOF'
 #import "PoolPredictor.h"
 #import "Config.h"
 #import "Stealth.h"
+#import "ModMenu.h"
 
 @interface UnityGraphicsCache : NSObject
 + (instancetype)sharedCache;
@@ -74,14 +66,57 @@ cat > build/fallback_tweak.m << 'EOF'
         UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
         if (!keyWindow) return;
         CGRect screenBounds = keyWindow.bounds;
-        CGRect tableBounds = CGRectMake(screenBounds.origin.x + 20, screenBounds.origin.y + 100, screenBounds.size.width - 40, screenBounds.size.height - 200);
+        ModMenu *menu = [ModMenu sharedMenu];
+        CGRect tableBounds = [PoolPredictor calibratedTableBounds:screenBounds manualOffset:menu.tableBoundsOffset];
+        [[OverlayWindow shared] updateTableBounds:tableBounds];
+        
         CGPoint baseCue = CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.25, tableBounds.origin.y + tableBounds.size.height*0.5);
         CGPoint baseTarget = CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.6, tableBounds.origin.y + tableBounds.size.height*0.5);
         CGPoint basePocket = CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y + 10);
         baseCue = HumanizePoint(baseCue, 0.8);
-        CGPoint ghost = [PoolPredictor ghostBallForTarget:baseTarget pocket:basePocket radius:12];
+        
+        NSArray *balls = @[
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.5, tableBounds.origin.y + tableBounds.size.height*0.5)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width*0.6, tableBounds.origin.y + tableBounds.size.height*0.4)]
+        ];
+        NSArray *pockets = @[
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width/2, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x, tableBounds.origin.y + tableBounds.size.height)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width/2, tableBounds.origin.y + tableBounds.size.height)],
+            [NSValue valueWithCGPoint:CGPointMake(tableBounds.origin.x + tableBounds.size.width, tableBounds.origin.y + tableBounds.size.height)]
+        ];
+        
         dispatch_async(dispatch_get_main_queue(), ^{
-            [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+            if (![OverlayWindow shared].helperEnabled) return;
+            ModMenu *menu = [ModMenu sharedMenu];
+            if (menu.ballByBallMode) {
+                NSDictionary *single = [PoolPredictor calculateSingleBallShot:baseCue target:baseTarget pocket:basePocket radius:menu.ballRadius > 0 ? menu.ballRadius : 12];
+                CGPoint ghost = [single[@"shot"][@"ghost"] CGPointValue];
+                [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+                if (menu.cueLeaveEnabled || menu.scratchWarningEnabled) {
+                    CGPoint leave = [PoolPredictor predictCueLeave:baseCue ghost:ghost target:baseTarget pocket:basePocket power:0 tableBounds:tableBounds];
+                    BOOL scratch = [PoolPredictor isScratch:leave pockets:pockets radius:18];
+                    [[OverlayWindow shared] drawCueLeave:leave isScratch:scratch];
+                }
+            } else {
+                if (menu.bestShotEnabled) {
+                    NSDictionary *best = [PoolPredictor findBestShot:baseCue balls:balls pockets:pockets radius:12 maxAngle:menu.maxAngle > 0 ? menu.maxAngle : 55];
+                    if (best) {
+                        NSMutableDictionary *b = [best mutableCopy];
+                        b[@"cue"] = [NSValue valueWithCGPoint:baseCue];
+                        [[OverlayWindow shared] drawBestShot:b];
+                    }
+                } else {
+                    CGPoint ghost = [PoolPredictor ghostBallForTarget:baseTarget pocket:basePocket radius:12];
+                    [[OverlayWindow shared] drawPredictionFromCue:baseCue ghost:ghost target:baseTarget pocket:basePocket];
+                }
+                if (menu.comboChainEnabled) {
+                    NSArray *chains = [PoolPredictor findComboChain:baseCue balls:balls pockets:pockets radius:12 maxBalls:3];
+                    [[OverlayWindow shared] drawComboChain:chains];
+                }
+            }
         });
     } @catch (NSException* e) {}
 }
@@ -89,19 +124,10 @@ cat > build/fallback_tweak.m << 'EOF'
 
 static BOOL g_initialized = NO;
 
-static void swizzleMethod(Class cls, SEL orig, SEL newSel) {
-    Method origMethod = class_getInstanceMethod(cls, orig);
-    Method newMethod = class_getInstanceMethod(cls, newSel);
-    if (origMethod && newMethod) {
-        method_exchangeImplementations(origMethod, newMethod);
-    }
-}
-
 @interface UnityAppControllerHook : NSObject
 @end
 
 @implementation UnityAppControllerHook
-
 - (void)hooked_applicationDidBecomeActive:(UIApplication*)app {
     [self hooked_applicationDidBecomeActive:app];
     if (!IsValidBundle()) return;
@@ -114,43 +140,31 @@ static void swizzleMethod(Class cls, SEL orig, SEL newSel) {
         [[UnityGraphicsCache sharedCache] startPredictionLoop];
     });
 }
-
 - (void)hooked_applicationWillResignActive:(UIApplication*)app {
     [self hooked_applicationWillResignActive:app];
     [[OverlayWindow shared] hide];
     [[UnityGraphicsCache sharedCache] stopPredictionLoop];
 }
-
 @end
 
 __attribute__((constructor))
 static void init_fallback() {
     if (!IsValidBundle()) return;
     [[StealthManager shared] setupAntiDetection];
-    
-    // Hook UnityAppController at runtime
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         Class cls = NSClassFromString(@"UnityAppController");
-        if (!cls) cls = NSClassFromString(@"UnityAppController");
         if (!cls) return;
-        
-        // Swizzle
         Method orig = class_getInstanceMethod(cls, @selector(applicationDidBecomeActive:));
         Method newM = class_getInstanceMethod([UnityAppControllerHook class], @selector(hooked_applicationDidBecomeActive:));
-        if (orig && newM) {
-            method_exchangeImplementations(orig, newM);
-        }
+        if (orig && newM) method_exchangeImplementations(orig, newM);
         Method orig2 = class_getInstanceMethod(cls, @selector(applicationWillResignActive:));
         Method new2 = class_getInstanceMethod([UnityAppControllerHook class], @selector(hooked_applicationWillResignActive:));
-        if (orig2 && new2) {
-            method_exchangeImplementations(orig2, new2);
-        }
+        if (orig2 && new2) method_exchangeImplementations(orig2, new2);
     });
 }
 EOF
 
-# Build command
-echo "[*] Compiling..."
+echo "[*] Compiling with Wizard/Ninja features..."
 
 xcrun clang -dynamiclib \
     -arch arm64 \
@@ -170,7 +184,7 @@ xcrun clang -dynamiclib \
     -framework CoreGraphics \
     -lobjc \
     -lstdc++ \
-    build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm \
+    build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm ModMenu.m \
     -o build/libUnityGraphics.dylib \
     -Wl,-x -Wl,-S -Wl,-dead_strip || {
     echo "[!] First attempt failed, trying without Vision..."
@@ -188,24 +202,23 @@ xcrun clang -dynamiclib \
         -framework CoreGraphics \
         -lobjc \
         -lstdc++ \
-        build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm \
+        build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm ModMenu.m \
         -o build/libUnityGraphics.dylib \
         -Wl,-x -Wl,-S
 }
 
-# Strip
 echo "[*] Stripping..."
 xcrun strip -x build/libUnityGraphics.dylib || strip -x build/libUnityGraphics.dylib || true
 
-# Copy to artifact with multiple innocent names
 cp build/libUnityGraphics.dylib artifact/libUnityGraphics.dylib
 cp build/libUnityGraphics.dylib artifact/libSwiftyPlugin.dylib
 cp build/libUnityGraphics.dylib artifact/libPoolHelper.dylib || true
 
-echo "[+] Build success!"
+echo "[+] Build success! Wizard/Ninja features included"
 ls -lh artifact/
 echo "[*] Checking strings..."
 strings artifact/*.dylib | grep -i "poolhelper\|cheat" && echo "WARNING: leaked strings" || echo "No obvious strings - GOOD"
 otool -L artifact/libUnityGraphics.dylib | head -20
 
 echo "[+] Done - dylib ready for TrollFools injection"
+echo "[*] Features: Ball-by-Ball (safe), Best Shot, Bank, Cue Leave, Scratch Warning, Combo Chain (optional), Long Guidelines, Mod Menu, Newest 56.29.x support"
