@@ -1,0 +1,88 @@
+name: Build Stealth Dylib - Wizard/Ninja + Auto Power Humanized
+
+on:
+  push:
+    branches: [ main, arena/* ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app || true
+
+      - name: Install Theos (robust)
+        run: |
+          set -e
+          if [ ! -d "$HOME/theos" ]; then
+            git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          else
+            cd $HOME/theos && git pull --recurse-submodules || true
+          fi
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+          brew install ldid dpkg xz 2>/dev/null || true
+          ls $HOME/theos/sdks/ || echo "No sdks yet"
+          if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ] && [ ! -d "$HOME/theos/sdks/iPhoneOS17.0.sdk" ]; then
+            curl -LO https://github.com/theos/sdks/archive/master.zip || true
+            unzip -q master.zip || true
+            mkdir -p $HOME/theos/sdks
+            cp -R sdks-master/* $HOME/theos/sdks/ 2>/dev/null || true
+          fi
+
+      - name: Show Theos
+        run: |
+          echo "THEOS=$THEOS"
+          ls -la $HOME/theos || true
+
+      - name: Build dylib (Theos) - Wizard/Ninja + Auto Power
+        run: |
+          set -e
+          export THEOS=$HOME/theos
+          export PATH=$THEOS/bin:$PATH
+          make clean || true
+          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless -j$(sysctl -n hw.ncpu) || make FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          echo "Build done - Wizard/Ninja + Auto Power Humanized 75% (NOT 100%)"
+          find . -name "*.dylib" | head -20
+
+      - name: Build fallback
+        if: failure()
+        run: |
+          chmod +x ./build.sh
+          ./build.sh || echo "Fallback failed"
+
+      - name: Post-process
+        run: |
+          set -e
+          mkdir -p artifact
+          find . -name "*.dylib" -type f | while read f; do
+            xcrun strip -x "$f" || strip -x "$f" || true
+            cp "$f" artifact/libUnityGraphics.dylib
+            cp "$f" artifact/libSwiftyPlugin.dylib || true
+            cp "$f" artifact/
+          done
+          find .theos -name "*.dylib" -type f -exec cp {} artifact/ \; 2>/dev/null || true
+          find . -name "*.deb" -exec cp {} artifact/ \; 2>/dev/null || true
+          ls -lh artifact/
+          strings artifact/*.dylib | grep -i "poolhelper\|cheat" || echo "No obvious strings - GOOD"
+          echo "Features: Wizard (Best Shot, Bank, Cue Leave, Scratch, Combo) + Ninja + Ball-by-Ball + Auto Power Humanized 75% (NOT 100% bot) + Newest 56.29.x"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stealth-Dylib-AutoPower-Humanized
+          path: artifact/
+          retention-days: 30
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifact/*

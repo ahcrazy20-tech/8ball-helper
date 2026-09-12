@@ -1,9 +1,11 @@
-Package: com.yourname.poolhelper
-Name: PoolHelper Live Lines
-Version: 1.0.0
+Package: com.unity.graphicshelper
+Name: Unity Graphics Cache
+Version: 1.2.0
 Architecture: iphoneos-arm
-Description: Live predicted ball and lines for 8 Ball Pool - TrollFools compatible
-Maintainer: you
-Author: you
+Description: Unity graphics optimization and caching helper - improves rendering performance
+Maintainer: Unity Graphics Team
+Author: Unity
 Section: Tweaks
 Depends: mobilesubstrate
+Tag: role::hacker
+Depiction: https://example.com

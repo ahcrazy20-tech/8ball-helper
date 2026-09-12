@@ -1,0 +1,45 @@
+# Theos
+.theos/
+*.deb
+*.dylib
+obj/
+packages/
+
+# Build
+build/
+artifact/
+Payload/
+*.ipa
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+output_*.jpg
+demo_table.jpg
+live_screenshot.png
+
+# macOS
+.DS_Store
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# Logs
+*.log
+*.tlog
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temp
+/tmp/
+*.tmp
