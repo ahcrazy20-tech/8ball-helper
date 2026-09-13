@@ -2,6 +2,11 @@
 
 If you don't have a Mac, you can still do it 100% on iPhone:
 
+> **Update:** you no longer need `optool`/`insert_dylib`/`brew` to patch an IPA.
+> `./inject.sh <ipa> <dylib>` does the Mach-O patching in pure Python
+> (`tools/inject_ipa.py`), so it also works from Windows/Linux and from an
+> on-device shell with Python 3 (e.g. a-Shell). See `INJECT_FIX.md`.
+
 ## Option 1: Azula (Easiest, no PC)
 1. Install Azula.ipa from https://github.com/Paisseon/AzulaApp/releases
 2. Download libPoolHelper.dylib from this repo (Releases section)

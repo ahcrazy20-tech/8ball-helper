@@ -1,111 +1,92 @@
-#!/bin/bash
-# inject.sh - Inject stealth dylib into IPA for Sideloadly / ESign / TrollStore
-# Usage: ./inject.sh 8BallPool.ipa libUnityGraphics.dylib
-# Stealth version: renames dylib to innocent name, strips, checks
+#!/usr/bin/env bash
+# inject.sh - inject the dylib into an 8 Ball Pool IPA (Sideloadly / ESign / TrollStore).
+#
+#   ./inject.sh <app.ipa> <libUnityGraphics.dylib> [-o patched.ipa] [options]
+#
+# Everything is done by tools/inject_ipa.py, a pure-Python 3 (stdlib only)
+# Mach-O + IPA patcher.  That means:
+#   * no optool / insert_dylib / brew needed (they are macOS-only and optool
+#     produces broken arm64 binaries anyway - it writes 0xdeadbeef into the
+#     dylib load command, which is exactly why injection used to "exit 1")
+#   * no unzip / zip / strip / otool needed
+#   * works on macOS, Linux, Windows (Git Bash / WSL) and on-device shells
+#
+# Run `./inject.sh --help` for the full option list.
+set -uo pipefail
 
-IPA=$1
-DYLIB=$2
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -z "$IPA" ] || [ -z "$DYLIB" ]; then
-  echo "Usage: ./inject.sh <path_to_8ballpool.ipa> <path_to_dylib>"
-  echo "Example: ./inject.sh 8BallPool.ipa artifact/libUnityGraphics.dylib"
-  echo ""
-  echo "Stealth tip: Use innocent name like libUnityGraphics.dylib"
+find_python() {
+  local cand
+  for cand in "${PYTHON:-}" python3 python; do
+    [ -n "$cand" ] || continue
+    if command -v "$cand" >/dev/null 2>&1 \
+       && "$cand" -c 'import sys, zipfile, plistlib, struct; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! PY="$(find_python)"; then
+  cat >&2 <<'MSG'
+[!] No Python 3.7+ found.
+
+    This script patches the Mach-O binary itself, so optool / insert_dylib /
+    brew / unzip are no longer required - but Python is:
+
+      macOS / Linux : python3 is usually preinstalled (on macOS run
+                      `xcode-select --install` once if it is missing)
+      Windows       : install https://www.python.org/downloads/ and tick
+                      "Add python.exe to PATH", then run this script from
+                      Git Bash (https://git-scm.com/download/win)
+      iPhone only   : skip this script and use TrollFools / Azula - they
+                      inject on the device
+
+    You can also point the script at a specific interpreter:  PYTHON=/path/to/python3 ./inject.sh ...
+MSG
   exit 1
 fi
 
-# Check files
-if [ ! -f "$IPA" ]; then
-  echo "[!] IPA not found: $IPA"
+TOOL="$HERE/tools/inject_ipa.py"
+if [ ! -f "$TOOL" ]; then
+  cat >&2 <<MSG
+[!] Cannot find $TOOL
+
+    inject.sh is only a wrapper - it needs tools/inject_ipa.py and
+    tools/macho_inject.py from this repository next to it.
+    Keep the folder layout intact (git clone the repo) and run it from there.
+MSG
   exit 1
 fi
-if [ ! -f "$DYLIB" ]; then
-  echo "[!] Dylib not found: $DYLIB"
+
+case "${1:-}" in
+  -h|--help|help)
+    exec "$PY" "$TOOL" --help
+    ;;
+esac
+
+if [ "$#" -lt 2 ]; then
+  cat <<'MSG'
+8 Ball Pool helper - IPA injector
+
+Usage: ./inject.sh <app.ipa> <dylib> [options]
+
+Examples:
+  ./inject.sh 8BallPool.ipa libUnityGraphics.dylib
+  ./inject.sh 8BallPool.ipa artifact/libUnityGraphics.dylib -o 8BallPool-patched.ipa
+  ./inject.sh --help            show every option (arch, names, dry-run, ...)
+
+Before you start:
+  * Use a DECRYPTED ipa (TrollStore -> the game -> AppDump).  An untouched
+    App Store ipa is still FairPlay-encrypted and the patched copy will not
+    launch - the script refuses it for that reason.
+  * The embedded code signature is removed on purpose: a modified binary
+    cannot keep a valid one.  Sideloadly / ESign / TrollStore / ldid add a
+    fresh signature when you install.
+MSG
   exit 1
 fi
 
-# Stealth rename - ensure innocent name
-BASENAME=$(basename "$DYLIB")
-if [[ "$BASENAME" == *"PoolHelper"* ]] || [[ "$BASENAME" == *"cheat"* ]] || [[ "$BASENAME" == *"hack"* ]]; then
-  echo "[!] WARNING: Dylib name $BASENAME is obvious and detectable!"
-  echo "[*] Renaming to libUnityGraphics.dylib for stealth..."
-  cp "$DYLIB" /tmp/libUnityGraphics.dylib
-  DYLIB="/tmp/libUnityGraphics.dylib"
-  BASENAME="libUnityGraphics.dylib"
-fi
-
-echo "[*] Unzipping IPA..."
-rm -rf Payload
-unzip -q "$IPA"
-
-APP=$(ls -d Payload/*.app 2>/dev/null | head -1)
-if [ -z "$APP" ]; then
-  echo "[!] No .app found in IPA"
-  exit 1
-fi
-echo "[*] Found app: $APP"
-
-echo "[*] Checking dylib for leaked strings (stealth check)..."
-if strings "$DYLIB" | grep -qi "poolhelper\|cheat\|hack\|ghost.*helper"; then
-  echo "[!] WARNING: Dylib contains obvious cheat strings!"
-  echo "    Consider rebuilding with stealth flags"
-else
-  echo "[+] No obvious cheat strings - GOOD"
-fi
-
-echo "[*] Stripping dylib for stealth..."
-strip -x "$DYLIB" 2>/dev/null || xcrun strip -x "$DYLIB" 2>/dev/null || echo "[!] Strip failed, continuing"
-
-echo "[*] Copying dylib to $APP/"
-cp "$DYLIB" "$APP/$BASENAME"
-
-# Use optool or insert_dylib to inject
-if command -v optool &> /dev/null; then
-  echo "[*] Using optool to inject..."
-  optool install -c load -p "@executable_path/$BASENAME" -t "$APP/$(basename $APP .app)" 
-elif command -v insert_dylib &> /dev/null; then
-  echo "[*] Using insert_dylib..."
-  insert_dylib --inplace --all-yes "@executable_path/$BASENAME" "$APP/$(basename $APP .app)"
-else
-  echo "[!] optool/insert_dylib not found"
-  echo "[*] Trying to install optool..."
-  if command -v brew &> /dev/null; then
-    brew install optool 2>/dev/null && optool install -c load -p "@executable_path/$BASENAME" -t "$APP/$(basename $APP .app)" || {
-      echo "[!] Please install manually: brew install optool"
-      echo "[!] Or use Azula app on iPhone to inject without Mac"
-      exit 1
-    }
-  else
-    echo "[!] Please install optool: brew install optool"
-    echo "[!] Or use Azula app on iPhone"
-    exit 1
-  fi
-fi
-
-echo "[*] Verifying injection..."
-if otool -L "$APP/$(basename $APP .app)" | grep -q "$BASENAME"; then
-  echo "[+] Injection verified!"
-else
-  echo "[!] Injection may have failed, check manually"
-fi
-
-echo "[*] Repackaging IPA..."
-zip -qr "8BallPool-Patched-Stealth.ipa" Payload
-
-echo ""
-echo "[+] Done! Patched IPA: 8BallPool-Patched-Stealth.ipa"
-echo "[*] Dylib injected as: $BASENAME (stealth name)"
-echo ""
-echo "Next steps:"
-echo "1. Sideload with Sideloadly: Drag IPA to Sideloadly -> Apple ID -> Start"
-echo "2. Or with ESign / TrollStore"
-echo "3. Trust in Settings -> General -> VPN & Device Management"
-echo ""
-echo "Stealth tips:"
-echo "- Only use in Play With Friends"
-echo "- Panic gesture: 3-finger double tap to hide"
-echo "- Tiny dot at top-left to toggle"
-
-# Cleanup
-rm -rf Payload
-rm -f /tmp/libUnityGraphics.dylib
+exec "$PY" "$TOOL" "$@"
