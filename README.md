@@ -31,7 +31,12 @@
 ├── Obfuscate.h             # XOR obfuscation
 ├── build.sh                # Fallback build with Wizard/Ninja features
 ├── control                 # Innocent package
-├── .github/workflows/build.yml  # Fixed + robust + fallback
+├── inject.sh               # IPA injector (Python only - no optool/brew needed)
+├── tools/macho_inject.py   # Mach-O editor: verify + LC_LOAD_DYLIB injection
+├── tools/inject_ipa.py     # IPA patcher: Info.plist, dylib naming, repackaging, verify
+├── tests/                  # 39 tests (python3 -m unittest discover -s tests -t .)
+├── INJECT_FIX.md           # Why injection used to "exit 1" + new troubleshooting
+├── .github/workflows/build.yml  # Build + test suite
 ├── WIZARD_NINJA_FEATURES.md # NEW: All Wizard/Ninja features comparison
 ├── STEALTH_GUIDE.md
 ├── SAFETY_GUIDE.md
@@ -143,10 +148,18 @@ See `SAFETY_GUIDE.md`.
 4. TrollFools → Select 8 Ball Pool → Inject → Respring
 5. Open game → tiny dot → 4-finger tap for menu → Ball-by-Ball ON (default safe)
 
-### Azula / Sideloadly:
+### Azula / Sideloadly (or any PC):
 ```bash
-./inject.sh 8BallPool.ipa libUnityGraphics.dylib
+./inject.sh 8BallPool.ipa libUnityGraphics.dylib          # -> 8BallPool-patched.ipa
+./inject.sh --help                                        # all options
 ```
+* Needs only Python 3.7+ (works on macOS, Linux, Windows, and on-device shells).
+  No `optool`, `insert_dylib`, `brew`, `unzip`, `otool` or `strip`.
+* Use a **decrypted** IPA (TrollStore → game → AppDump). An untouched App Store
+  IPA is FairPlay-encrypted and the script refuses it, because a patched copy of
+  it cannot launch.
+* The stale code signature is removed on purpose — Sideloadly/ESign/TrollStore
+  re-sign the bundle on install. See `INJECT_FIX.md` for details + troubleshooting.
 
 ## 📚 Docs
 
@@ -155,6 +168,7 @@ See `SAFETY_GUIDE.md`.
 - `SAFETY_GUIDE.md` - How to not get banned
 - `LEARNING_ROADMAP.md` - Learn everything
 - `BUILD_FIX.md` - Why build failed
+- `INJECT_FIX.md` - Why injection failed (exit code 1) + what to do about every failure mode
 
 ## 🔮 Supports Newest Version
 

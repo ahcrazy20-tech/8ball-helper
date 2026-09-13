@@ -110,11 +110,14 @@ Use **Azula** (no PC needed) or **ESign**:
 
 **ESign method (needs PC once):**
 1. Download Sideloadly: https://sideloadly.io/
-2. Run stealth inject script:
+2. Run the injector (needs only Python 3.7+, no optool/brew):
 ```bash
-./inject.sh 8BallPool.ipa libUnityGraphics.dylib
-# It auto-checks for leaked strings and uses innocent name
+./inject.sh 8BallPool.ipa libUnityGraphics.dylib      # writes 8BallPool-patched.ipa
+# It checks for leaked strings, uses an innocent name, drops the stale signature
+# and verifies the patched IPA before it lets you install it.
 ```
+   Note: use a **decrypted** IPA (TrollStore -> the game -> AppDump). The script
+   refuses an untouched App Store IPA because a patched copy of it cannot run.
 3. Drag patched IPA to Sideloadly -> Enter Apple ID -> Start
 4. On iPhone: Settings -> General -> VPN & Device Management -> Trust
 
@@ -145,6 +148,12 @@ Use **Azula** (no PC needed) or **ESign**:
 - Make sure 8 Ball Pool installed from App Store (not TestFlight)
 - Try reinstall game, then inject again
 - Use innocent name `libUnityGraphics.dylib`
+
+**`./inject.sh` says "failed to inject ... exited with code 1"?**
+- Fixed: the old script needed `optool`/`insert_dylib` (macOS-only, not installed
+  by default). It now patches the Mach-O itself with Python.
+- Install Python 3.7+ if the script says it cannot find it, then re-run.
+- Full list of messages and what to do: see `INJECT_FIX.md`.
 
 **Game crashes after injection?**
 - New version has bundle check - only activates in 8 Ball Pool, safe
