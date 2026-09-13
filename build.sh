@@ -10,6 +10,15 @@ SDK=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || echo "/Applications/Xc
 if [ ! -d "$SDK" ]; then
     SDK=$(ls -d /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS*.sdk 2>/dev/null | head -1)
 fi
+if [ ! -d "$SDK" ] && [ -n "$THEOS" ]; then
+    # Last resort: use the newest SDK that Theos downloaded.
+    SDK=$(ls -d "$THEOS"/sdks/iPhoneOS*.sdk 2>/dev/null | sort -V | tail -1)
+fi
+
+if [ ! -d "$SDK" ]; then
+    echo "[!] ERROR: no iPhoneOS SDK found. Install Xcode (macOS) or set THEOS with \$THEOS/sdks populated." >&2
+    exit 1
+fi
 
 echo "[*] Using SDK: $SDK"
 
@@ -166,6 +175,14 @@ EOF
 
 echo "[*] Compiling with Wizard/Ninja features..."
 
+# NOTE: -lstdc++ is NOT available in the iOS SDK (Apple ships libc++ only) and
+# makes ld fail with "library not found for -lstdc++". The C++/ObjC++ objects
+# (.mm) make the clang driver link libc++ automatically, so no -l flag is needed.
+# Also NOTE: -std=c++17 must NOT be passed here - this single invocation also
+# compiles the plain Objective-C .m files, and clang errors out with
+# "invalid argument '-std=c++17' not allowed with 'Objective-C'". The .mm files
+# get their C++ standard from the driver default.
+# Vision.framework is not referenced by any source, so it is not linked.
 xcrun clang -dynamiclib \
     -arch arm64 \
     -miphoneos-version-min=14.0 \
@@ -176,18 +193,19 @@ xcrun clang -dynamiclib \
     -fvisibility-inlines-hidden \
     -DNDEBUG \
     -DSTEALTH_RELEASE=1 \
+    -Qunused-arguments \
+    -Wno-unused-variable \
+    -Wno-unused-function \
     -I. \
     -framework Foundation \
     -framework UIKit \
     -framework QuartzCore \
-    -framework Vision \
     -framework CoreGraphics \
     -lobjc \
-    -lstdc++ \
     build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm ModMenu.m \
     -o build/libUnityGraphics.dylib \
     -Wl,-x -Wl,-S -Wl,-dead_strip || {
-    echo "[!] First attempt failed, trying without Vision..."
+    echo "[!] First attempt failed, retrying with a relaxed flag set..."
     xcrun clang -dynamiclib \
         -arch arm64 \
         -miphoneos-version-min=14.0 \
@@ -195,30 +213,31 @@ xcrun clang -dynamiclib \
         -fobjc-arc \
         -O2 \
         -fvisibility=hidden \
+        -Qunused-arguments \
         -I. \
         -framework Foundation \
         -framework UIKit \
         -framework QuartzCore \
         -framework CoreGraphics \
         -lobjc \
-        -lstdc++ \
         build/fallback_tweak.m OverlayWindow.m PoolPredictor.mm Stealth.mm ModMenu.m \
         -o build/libUnityGraphics.dylib \
         -Wl,-x -Wl,-S
 }
 
 echo "[*] Stripping..."
-xcrun strip -x build/libUnityGraphics.dylib || strip -x build/libUnityGraphics.dylib || true
+xcrun strip -x build/libUnityGraphics.dylib 2>/dev/null || strip -x build/libUnityGraphics.dylib 2>/dev/null || true
 
 cp build/libUnityGraphics.dylib artifact/libUnityGraphics.dylib
 cp build/libUnityGraphics.dylib artifact/libSwiftyPlugin.dylib
-cp build/libUnityGraphics.dylib artifact/libPoolHelper.dylib || true
 
 echo "[+] Build success! Wizard/Ninja features included"
 ls -lh artifact/
 echo "[*] Checking strings..."
-strings artifact/*.dylib | grep -i "poolhelper\|cheat" && echo "WARNING: leaked strings" || echo "No obvious strings - GOOD"
-otool -L artifact/libUnityGraphics.dylib | head -20
+# grep exits 1 when nothing matches, which would abort the script under `set -e`.
+strings artifact/*.dylib 2>/dev/null | grep -i "poolhelper\|cheat" && echo "WARNING: leaked strings" || echo "No obvious strings - GOOD"
+otool -L artifact/libUnityGraphics.dylib 2>/dev/null | head -20 || true
+
 
 echo "[+] Done - dylib ready for TrollFools injection"
 echo "[*] Features: Ball-by-Ball (safe), Best Shot, Bank, Cue Leave, Scratch Warning, Combo Chain (optional), Long Guidelines, Mod Menu, Newest 56.29.x support"

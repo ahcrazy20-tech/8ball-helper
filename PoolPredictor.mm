@@ -1,7 +1,6 @@
 #import "PoolPredictor.h"
 #import "Config.h"
 #import "Stealth.h"
-#import <Vision/Vision.h>
 #import <CoreGraphics/CoreGraphics.h>
 #include <vector>
 #include <cmath>
@@ -295,7 +294,7 @@
                 CGPoint pocket = [pVal CGPointValue];
                 
                 // Calculate ghost for ball1 -> ball2
-                CGPoint ghost1 = [self ghostBallForTarget:ball1 pocket:ball2.x radius:radius];
+                CGPoint ghost1 = [self ghostBallForTarget:ball1 pocket:ball2 radius:radius];
                 CGFloat angle1 = [self angleBetweenCue:cue ghost:ghost1 target:ball1 pocket:ball2];
                 if (angle1 > SAFETY_MAX_ANGLE) continue;
                 

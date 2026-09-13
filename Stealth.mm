@@ -5,9 +5,10 @@
 #include <unistd.h>
 #import <UIKit/UIKit.h>
 
-#if ENABLE_ANTIDEBUG
-#include <sys/ptrace.h>
-#endif
+// NOTE: <sys/ptrace.h> does NOT exist in the iOS SDK (only in the macOS one),
+// so including it fails the build with "'sys/ptrace.h' file not found".
+// AntiDebug() below resolves ptrace() through dlsym() instead, which also
+// keeps the symbol out of the dylib's undefined-symbol table.
 
 @implementation StealthManager
 
@@ -25,9 +26,16 @@
     NSString* bundleID = [[NSBundle mainBundle] bundleIdentifier];
     if (!bundleID) return NO;
     
-    // Only activate in 8 Ball Pool
-    if ([bundleID isEqualToString:@TARGET_BUNDLE_1]) return YES;
-    if ([bundleID isEqualToString:@TARGET_BUNDLE_2]) return YES;
+    // Only activate in 8 Ball Pool.
+    // TARGET_BUNDLE_* are plain C string literals in Config.h, so they must be
+    // boxed with @(...) to become NSString*. Writing `@TARGET_BUNDLE_1` expands
+    // to `@"com.miniclip.8ballpool"` (@" immediately followed by a string
+    // literal, which is invalid), and dropping the @ entirely fails with
+    // "string literal must be prefixed by '@'" because isEqualToString: needs
+    // an NSString, not a const char*.
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_1)]) return YES;
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_2)]) return YES;
+    if ([bundleID isEqualToString:@(TARGET_BUNDLE_3)]) return YES;
     
     // Also allow if bundle contains miniclip
     if ([bundleID containsString:@"miniclip"] && [bundleID containsString:@"8ball"]) return YES;
@@ -90,12 +98,25 @@ BOOL IsDebuggerAttached(void) {
 
 void AntiDebug(void) {
 #if ENABLE_ANTIDEBUG
-    // PT_DENY_ATTACH - prevent debugger attaching
-    // This is classic anti-debug, but can be detected itself, so we do it quietly
-    // On iOS 12+, ptrace may not be allowed, so wrap in try
-    #ifdef PT_DENY_ATTACH
-    ptrace(PT_DENY_ATTACH, 0, 0, 0);
-    #endif
+    // PT_DENY_ATTACH == 31 on Darwin. The constant normally comes from
+    // <sys/ptrace.h>, which the iOS SDK does not ship.
+    const int PT_DENY_ATTACH_VALUE = 31;
+
+    // Resolve ptrace() at runtime. iOS restricts ptrace() anyway, so this is
+    // deliberately best-effort: if the symbol is unavailable we just skip it
+    // instead of failing the build or crashing at launch. RTLD_DEFAULT is used
+    // because ptrace() lives in libSystem, not in this image.
+    // (The real prototype is int ptrace(int, pid_t, caddr_t, int); a void*
+    // third parameter is ABI-identical and avoids relying on caddr_t.)
+    typedef int (*ptrace_fn_t)(int, pid_t, void *, int);
+    static ptrace_fn_t ptrace_fn = NULL;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        ptrace_fn = (ptrace_fn_t)dlsym(RTLD_DEFAULT, "ptrace");
+    });
+    if (ptrace_fn) {
+        ptrace_fn(PT_DENY_ATTACH_VALUE, 0, NULL, 0);
+    }
 #endif
 }
 
